@@ -53,8 +53,10 @@ Innerhalb des Containers:
 
 ```bash
 mkdir -p sanitized
-docker compose run --rm web python tools/sanitize_statement.py \
-  /pfad/im/container/kontoauszug.pdf sanitized/ing-layout.json
+docker compose run --rm \
+  -v "/lokaler/ordner/mit/pdf:/input:ro" \
+  web python tools/sanitize_statement.py \
+  "/input/Kontoauszug.pdf" sanitized/ing-layout.json
 ```
 
 Ohne Docker in einer Python-Umgebung mit installierten Projektabhängigkeiten:
