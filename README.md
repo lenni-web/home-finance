@@ -106,3 +106,18 @@ python -m tools.validate_ing_pdf "/lokaler/pfad/Kontoauszug.pdf" \
 5. Erst `Alle Buchungen bestätigen` markiert den Auszug als importiert.
 
 Bereits hochgeladene identische Dateien werden über ihren SHA-256-Hash abgewiesen.
+
+## Buchungen kategorisieren
+
+Unter `/transactions/` stehen ausschließlich bestätigte Buchungen zur Verfügung.
+Die Ansicht bietet Monats-, Konto-, Kategorie-, Tag-, Personen- und Textfilter sowie
+Summen für Einnahmen, Ausgaben und Differenz.
+
+Zuordnungen lassen sich entweder direkt je Tabellenzeile oder gesammelt für markierte
+Buchungen speichern. Bei einer Sammelzuordnung können aus den Zahlungspartnern Regeln
+angelegt werden. Automatische Regeln werden bei späteren Kontoauszügen direkt angewendet;
+nicht automatische Regeln erscheinen als sichtbarer Vorschlag.
+
+Unter `/settings/classification/` können Kategorien, Tags, Personen und Regeln angelegt
+sowie aktiviert oder deaktiviert werden. Eine Deaktivierung entfernt keine bestehenden
+Zuordnungen.

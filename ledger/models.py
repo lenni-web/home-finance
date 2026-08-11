@@ -25,6 +25,7 @@ class Account(TimestampedModel):
 class Category(TimestampedModel):
     name = models.CharField(max_length=100, unique=True)
     color = models.CharField(max_length=7, default="#64748b")
+    active = models.BooleanField(default=True)
 
     def __str__(self):
         return self.name
@@ -33,6 +34,7 @@ class Category(TimestampedModel):
 class Tag(TimestampedModel):
     name = models.CharField(max_length=80, unique=True)
     color = models.CharField(max_length=7, default="#0f766e")
+    active = models.BooleanField(default=True)
 
     def __str__(self):
         return self.name
@@ -157,3 +159,24 @@ class Transaction(TimestampedModel):
 
     def __str__(self):
         return f"{self.booking_date}: {self.description[:40]} ({self.amount} {self.currency})"
+
+
+class CategorizationRule(TimestampedModel):
+    name = models.CharField(max_length=160)
+    match_text = models.CharField(max_length=255, unique=True)
+    category = models.ForeignKey(Category, null=True, blank=True, on_delete=models.SET_NULL)
+    tags = models.ManyToManyField(Tag, blank=True, related_name="categorization_rules")
+    people = models.ManyToManyField(Person, blank=True, related_name="categorization_rules")
+    auto_apply = models.BooleanField(default=True)
+    active = models.BooleanField(default=True)
+    times_applied = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["name"]
+
+    def matches(self, transaction):
+        haystack = f"{transaction.counterparty}\n{transaction.description}".casefold()
+        return self.match_text.casefold() in haystack
+
+    def __str__(self):
+        return self.name

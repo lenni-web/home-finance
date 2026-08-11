@@ -3,7 +3,9 @@ import hashlib
 from django import forms
 from django.forms import modelformset_factory
 
-from .models import Account, Document, Transaction
+from .models import (
+    Account, CategorizationRule, Category, Document, Person, Tag, Transaction,
+)
 
 
 class AccountForm(forms.ModelForm):
@@ -79,3 +81,82 @@ TransactionReviewFormSet = modelformset_factory(
     form=TransactionReviewForm,
     extra=0,
 )
+
+
+class TransactionFilterForm(forms.Form):
+    month = forms.CharField(required=False, widget=forms.TextInput(attrs={"type": "month"}))
+    account = forms.ModelChoiceField(
+        queryset=Account.objects.all(), required=False, empty_label="Alle Konten"
+    )
+    category = forms.ModelChoiceField(
+        queryset=Category.objects.all(), required=False, empty_label="Alle Kategorien"
+    )
+    tag = forms.ModelChoiceField(queryset=Tag.objects.all(), required=False, empty_label="Alle Tags")
+    person = forms.ModelChoiceField(
+        queryset=Person.objects.all(), required=False, empty_label="Alle Personen"
+    )
+    q = forms.CharField(required=False, label="Suche")
+    uncategorized = forms.BooleanField(required=False, label="Nur ohne Kategorie")
+
+
+class TransactionCategorizationForm(forms.ModelForm):
+    class Meta:
+        model = Transaction
+        fields = ["category", "tags", "people"]
+        widgets = {
+            "tags": forms.SelectMultiple(attrs={"size": 3}),
+            "people": forms.SelectMultiple(attrs={"size": 3}),
+        }
+
+
+TransactionCategorizationFormSet = modelformset_factory(
+    Transaction,
+    form=TransactionCategorizationForm,
+    extra=0,
+)
+
+
+class BulkCategorizationForm(forms.Form):
+    category = forms.ModelChoiceField(
+        queryset=Category.objects.filter(active=True), required=False, empty_label="Nicht ändern"
+    )
+    tags = forms.ModelMultipleChoiceField(
+        queryset=Tag.objects.filter(active=True), required=False, widget=forms.SelectMultiple(attrs={"size": 3})
+    )
+    people = forms.ModelMultipleChoiceField(
+        queryset=Person.objects.filter(active=True), required=False,
+        widget=forms.SelectMultiple(attrs={"size": 3}),
+    )
+    create_rules = forms.BooleanField(
+        required=False, label="Für ausgewählte Zahlungspartner Regeln anlegen"
+    )
+    auto_apply = forms.BooleanField(
+        required=False, initial=True, label="Neue Regeln künftig automatisch anwenden"
+    )
+
+
+class CategoryForm(forms.ModelForm):
+    class Meta:
+        model = Category
+        fields = ["name", "color"]
+        widgets = {"color": forms.TextInput(attrs={"type": "color"})}
+
+
+class TagForm(forms.ModelForm):
+    class Meta:
+        model = Tag
+        fields = ["name", "color"]
+        widgets = {"color": forms.TextInput(attrs={"type": "color"})}
+
+
+class PersonForm(forms.ModelForm):
+    class Meta:
+        model = Person
+        fields = ["name", "color"]
+        widgets = {"color": forms.TextInput(attrs={"type": "color"})}
+
+
+class CategorizationRuleForm(forms.ModelForm):
+    class Meta:
+        model = CategorizationRule
+        fields = ["name", "match_text", "category", "tags", "people", "auto_apply"]

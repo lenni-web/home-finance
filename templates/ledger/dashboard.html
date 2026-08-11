@@ -19,7 +19,7 @@
   </style>
 </head>
 <body>
-  <header><div><h1>Ausgabenarchiv</h1><p>Belege und Kontoauszüge an einem Ort.</p></div><a href="/admin/">Verwaltung</a></header>
+  <header><div><h1>Ausgabenarchiv</h1><p>Belege und Kontoauszüge an einem Ort.</p></div><nav><a href="{% url 'transaction_overview' %}">Buchungen</a> · <a href="{% url 'manage_classification' %}">Kategorien & Regeln</a> · <a href="/admin/">Admin</a></nav></header>
   {% for message in messages %}<div class="card">{{ message }}</div>{% endfor %}
   <section class="card"><h2>Konto anlegen</h2><p>Für den ersten Kontoauszug wird zunächst ein Konto benötigt. Es genügt ein frei gewählter Name; die vollständige IBAN wird nicht gespeichert.</p><form method="post" action="{% url 'add_account' %}">{% csrf_token %}{{ account_form.as_p }}<button>Konto anlegen</button></form></section>
   <div class="grid">

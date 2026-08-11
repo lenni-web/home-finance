@@ -1,6 +1,9 @@
 from django.contrib import admin
 
-from .models import Account, Category, Document, DocumentPerson, Person, StatementImport, Tag, Transaction
+from .models import (
+    Account, CategorizationRule, Category, Document, DocumentPerson, Person,
+    StatementImport, Tag, Transaction,
+)
 
 
 @admin.register(Document)
@@ -21,4 +24,6 @@ class TransactionAdmin(admin.ModelAdmin):
     date_hierarchy = "booking_date"
 
 
-admin.site.register([Account, Category, Tag, Person, StatementImport, DocumentPerson])
+admin.site.register([
+    Account, Category, Tag, Person, StatementImport, DocumentPerson, CategorizationRule,
+])

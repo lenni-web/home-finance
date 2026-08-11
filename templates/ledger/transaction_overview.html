@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Buchungsübersicht</title>
+  <style>
+    :root { font-family: system-ui, sans-serif; color: #1f2937; background: #f8fafc; }
+    body { margin: auto; padding: 1.5rem; max-width: 1600px; }
+    header, .summary, .filters, .bulk-grid { display: flex; gap: 1rem; align-items: start; }
+    header { justify-content: space-between; }
+    .card { background: white; border: 1px solid #e2e8f0; border-radius: 14px; padding: 1rem; margin: 1rem 0; }
+    .metric { flex: 1; } .metric strong { display: block; font-size: 1.5rem; margin-top: .3rem; }
+    .filters { flex-wrap: wrap; } .filters p { margin: 0; min-width: 150px; flex: 1; }
+    label { display: block; font-size: .82rem; font-weight: 650; margin-bottom: .25rem; }
+    input, select, textarea { box-sizing: border-box; width: 100%; padding: .45rem; }
+    .table-wrap { overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; min-width: 1300px; }
+    th, td { padding: .5rem; text-align: left; vertical-align: top; border-bottom: 1px solid #e2e8f0; }
+    th { position: sticky; top: 0; background: white; }
+    .number { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .negative { color: #b91c1c; } .positive { color: #047857; }
+    .muted { color: #64748b; font-size: .82rem; }
+    .suggestion { display: block; margin-top: .35rem; color: #7c3aed; font-size: .78rem; }
+    .bulk-grid > p { flex: 1; margin: 0; } .bulk-grid > p:first-child { flex: 1.3; }
+    button { border: 0; border-radius: 8px; padding: .7rem 1rem; background: #0f766e; color: white; cursor: pointer; }
+    .secondary { background: #334155; }
+    .actions { position: sticky; bottom: 0; padding: 1rem; background: rgba(248,250,252,.96); display: flex; justify-content: flex-end; gap: .75rem; }
+    .messages { border-left: 4px solid #0f766e; }
+    @media (max-width: 800px) { header, .summary, .filters, .bulk-grid { display: block; } .metric { margin-bottom: .7rem; } }
+  </style>
+</head>
+<body>
+  <header><div><h1>Buchungsübersicht</h1><p>{{ transaction_count }} Buchungen, davon {{ uncategorized_count }} ohne Kategorie</p></div><nav><a href="{% url 'dashboard' %}">Archiv</a> · <a href="{% url 'manage_classification' %}">Kategorien & Regeln</a></nav></header>
+  {% for message in messages %}<div class="card messages">{{ message }}</div>{% endfor %}
+  <section class="summary">
+    <div class="card metric">Einnahmen<strong class="positive">{{ totals.income|floatformat:2 }} €</strong></div>
+    <div class="card metric">Ausgaben<strong class="negative">{{ totals.expenses|floatformat:2 }} €</strong></div>
+    <div class="card metric">Differenz<strong>{{ totals.balance|floatformat:2 }} €</strong></div>
+  </section>
+  <section class="card"><form method="get"><div class="filters">{{ filters.as_p }}</div><p><button>Filter anwenden</button> <a href="{% url 'transaction_overview' %}">Zurücksetzen</a></p></form></section>
+  <form method="post">{% csrf_token %}{{ formset.management_form }}{{ formset.non_form_errors }}
+    <section class="card"><h2>Auswahl gemeinsam bearbeiten</h2><div class="bulk-grid">{{ bulk_form.as_p }}</div><p><button name="action" value="bulk">Auf markierte Buchungen anwenden</button></p></section>
+    <section class="card table-wrap"><table><thead><tr><th><input type="checkbox" aria-label="Alle auswählen" onclick="document.querySelectorAll('[name=selected]').forEach(x => x.checked=this.checked)"></th><th>Datum</th><th>Konto</th><th>Zahlungspartner / Zweck</th><th>Betrag</th><th>Kategorie</th><th>Tags</th><th>Personen</th></tr></thead><tbody>
+      {% for form in formset %}<tr>
+        <td><input type="checkbox" name="selected" value="{{ form.instance.pk }}">{{ form.id }}</td>
+        <td>{{ form.instance.booking_date|date:"d.m.Y" }}<div class="muted">Valuta {{ form.instance.value_date|date:"d.m.Y" }}</div></td>
+        <td>{{ form.instance.statement_import.account }}</td>
+        <td><strong>{{ form.instance.counterparty|default:form.instance.booking_type }}</strong><div class="muted">{{ form.instance.description|linebreaksbr|truncatechars:220 }}</div>{% if form.instance.rule_suggestion %}<span class="suggestion">Regelvorschlag: {{ form.instance.rule_suggestion.category|default:form.instance.rule_suggestion.name }}</span>{% endif %}</td>
+        <td class="number {% if form.instance.amount < 0 %}negative{% else %}positive{% endif %}">{{ form.instance.amount|floatformat:2 }} €</td>
+        <td>{{ form.category.errors }}{{ form.category }}</td>
+        <td>{{ form.tags.errors }}{{ form.tags }}</td>
+        <td>{{ form.people.errors }}{{ form.people }}</td>
+      </tr>{% empty %}<tr><td colspan="8">Keine Buchungen für diesen Filter.</td></tr>{% endfor %}
+    </tbody></table></section>
+    <div class="actions"><button class="secondary" name="action" value="inline_save">Einzelne Zuordnungen speichern</button></div>
+  </form>
+</body></html>
+
