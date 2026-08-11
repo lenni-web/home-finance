@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
@@ -17,6 +18,7 @@ from .models import (
 )
 from .rules import apply_categorization_rules
 from .statement_reconciliation import store_reconciliation
+from .statement_processing import process_statement_import
 
 
 class DocumentModelTests(TestCase):
@@ -41,8 +43,39 @@ class DocumentModelTests(TestCase):
                 self.assertIn("documents/2026/08/", document.file.name)
 
 
+class AccessControlTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user("access", password="secret-test-password")
+        self.document = Document.objects.create(
+            kind=Document.Kind.INVOICE,
+            original_filename="private.pdf",
+            file=SimpleUploadedFile("private.pdf", b"private-content", "application/pdf"),
+        )
+
+    def test_financial_pages_redirect_to_login(self):
+        response = self.client.get(reverse("dashboard"))
+
+        self.assertRedirects(response, f"{reverse('login')}?next={reverse('dashboard')}")
+
+    def test_document_download_requires_login(self):
+        url = reverse("document_download", args=[self.document.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 302)
+
+        self.client.force_login(self.user)
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+
+    def test_health_endpoint_remains_public(self):
+        response = self.client.get(reverse("health"))
+        self.assertEqual(response.status_code, 200)
+
+
 class StatementWorkflowTests(TestCase):
     def setUp(self):
+        self.user = get_user_model().objects.create_user("tester", password="secret-test-password")
+        self.client.force_login(self.user)
         self.account = Account.objects.create(name="ING Girokonto")
 
     def test_account_can_be_created_from_dashboard(self):
@@ -73,18 +106,8 @@ class StatementWorkflowTests(TestCase):
             fields_per_transaction * expected_large_statement,
         )
 
-    @patch("ledger.views.INGStatementParser.parse_statement_pdf")
-    def test_statement_upload_creates_review_batch(self, parse_statement_pdf):
-        parse_statement_pdf.return_value = ParsedStatement(transactions=[ParsedTransaction(
-            booking_date="2026-07-01",
-            value_date="2026-07-02",
-            booking_type="Lastschrift",
-            counterparty="Beispiel GmbH",
-            description="Test",
-            amount="-10.00",
-            currency="EUR",
-            source_page=1,
-        )], opening_balance=Decimal("100.00"), closing_balance=Decimal("90.00"))
+    @patch("ledger.views.process_statement_task.delay")
+    def test_statement_upload_queues_background_task(self, delay):
         with tempfile.TemporaryDirectory() as media_root:
             with override_settings(MEDIA_ROOT=Path(media_root)):
                 response = self.client.post(reverse("upload_document"), {
@@ -96,7 +119,34 @@ class StatementWorkflowTests(TestCase):
                 })
 
         statement = StatementImport.objects.get()
-        self.assertRedirects(response, reverse("statement_review", args=[statement.pk]))
+        self.assertRedirects(response, reverse("dashboard"))
+        self.assertEqual(statement.status, StatementImport.Status.UPLOADED)
+        self.assertEqual(statement.transactions.count(), 0)
+        delay.assert_called_once_with(statement.pk)
+
+    @patch("ledger.statement_processing.INGStatementParser.parse_statement_pdf")
+    def test_statement_background_processing_creates_review_batch(self, parse_statement_pdf):
+        document = Document.objects.create(
+            kind=Document.Kind.BANK_STATEMENT,
+            original_filename="kontoauszug.pdf",
+            file=SimpleUploadedFile("kontoauszug.pdf", b"%PDF-background", "application/pdf"),
+        )
+        statement = StatementImport.objects.create(document=document, account=self.account)
+        parse_statement_pdf.return_value = ParsedStatement(transactions=[ParsedTransaction(
+            booking_date="2026-07-01",
+            value_date="2026-07-02",
+            booking_type="Lastschrift",
+            counterparty="Beispiel GmbH",
+            description="Test",
+            amount="-10.00",
+            currency="EUR",
+            source_page=1,
+        )], opening_balance=Decimal("100.00"), closing_balance=Decimal("90.00"))
+
+        count = process_statement_import(statement)
+
+        statement.refresh_from_db()
+        self.assertEqual(count, 1)
         self.assertEqual(statement.status, StatementImport.Status.REVIEW)
         self.assertEqual(
             statement.reconciliation_status, StatementImport.ReconciliationStatus.BALANCED
@@ -184,6 +234,8 @@ class StatementWorkflowTests(TestCase):
 
 class CategorizationWorkflowTests(TestCase):
     def setUp(self):
+        self.user = get_user_model().objects.create_user("categories", password="secret-test-password")
+        self.client.force_login(self.user)
         self.account = Account.objects.create(name="ING")
         self.document = Document.objects.create(
             kind=Document.Kind.BANK_STATEMENT,
@@ -304,6 +356,10 @@ class CategorizationWorkflowTests(TestCase):
 
 
 class DocumentProcessingTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user("documents", password="secret-test-password")
+        self.client.force_login(self.user)
+
     def test_extracts_receipt_metadata_from_text(self):
         text = """Musterladen Berlin
 Rechnung
@@ -316,8 +372,8 @@ Gesamt 12,34 EUR
         self.assertEqual(_parse_total(text), Decimal("12.34"))
         self.assertEqual(_parse_merchant(text), "Musterladen Berlin")
 
-    @patch("ledger.views.process_document")
-    def test_receipt_upload_redirects_to_document_review(self, process):
+    @patch("ledger.views.process_document_task.delay")
+    def test_receipt_upload_queues_background_task(self, delay):
         with tempfile.TemporaryDirectory() as media_root:
             with override_settings(MEDIA_ROOT=Path(media_root)):
                 response = self.client.post(reverse("upload_document"), {
@@ -326,8 +382,8 @@ Gesamt 12,34 EUR
                 })
 
         document = Document.objects.get()
-        self.assertRedirects(response, reverse("document_review", args=[document.pk]))
-        process.assert_called_once_with(document)
+        self.assertRedirects(response, reverse("dashboard"))
+        delay.assert_called_once_with(document.pk)
 
     def test_document_can_be_linked_to_matching_transaction(self):
         account = Account.objects.create(name="ING")

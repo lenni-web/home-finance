@@ -1,10 +1,10 @@
-import hashlib
-from pathlib import Path
+import mimetypes
 
 from django.contrib import messages
-from django.db import transaction
+from django.contrib.auth.decorators import login_required
 from django.db.models import Q, Sum
 from django.db.models.functions import TruncMonth
+from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import (
@@ -13,14 +13,14 @@ from .forms import (
     DocumentUploadForm, PersonForm, TagForm, TransactionCategorizationFormSet,
     TransactionFilterForm, TransactionReviewFormSet,
 )
-from .document_processing import process_document
 from .document_matching import document_transaction_candidates, refresh_unmatched_document_reviews
 from .importers import INGStatementParser
 from .models import CategorizationRule, Category, Document, Person, StatementImport, Tag, Transaction
-from .rules import apply_categorization_rules, matching_rules
-from .statement_reconciliation import store_reconciliation
+from .rules import matching_rules
+from .tasks import process_document_task, process_statement_task
 
 
+@login_required
 def dashboard(request):
     months = (
         Document.objects.exclude(document_date=None)
@@ -39,6 +39,7 @@ def dashboard(request):
     })
 
 
+@login_required
 def add_account(request):
     if request.method != "POST":
         return redirect("dashboard")
@@ -52,6 +53,7 @@ def add_account(request):
     return redirect("dashboard")
 
 
+@login_required
 def upload_document(request):
     if request.method != "POST":
         return redirect("dashboard")
@@ -64,65 +66,21 @@ def upload_document(request):
                 account=form.cleaned_data["account"],
                 parser_name=INGStatementParser.name,
                 parser_version=INGStatementParser.version,
-                status=StatementImport.Status.PROCESSING,
+                status=StatementImport.Status.UPLOADED,
             )
-            try:
-                parsed_statement = INGStatementParser().parse_statement_pdf(Path(document.file.path))
-                parsed = parsed_statement.transactions
-                if not parsed:
-                    raise ValueError("Im PDF wurden keine Buchungen erkannt.")
-                with transaction.atomic():
-                    for index, item in enumerate(parsed, start=1):
-                        fingerprint_source = (
-                            f"{document.sha256}:{item.source_page}:{index}:"
-                            f"{item.booking_date}:{item.amount}:{item.counterparty}"
-                        )
-                        created = Transaction.objects.create(
-                            statement_import=statement,
-                            booking_date=item.booking_date,
-                            value_date=item.value_date,
-                            booking_type=item.booking_type,
-                            counterparty=item.counterparty,
-                            description=item.description,
-                            amount=item.amount,
-                            currency=item.currency,
-                            source_page=item.source_page,
-                            source_fingerprint=hashlib.sha256(
-                                fingerprint_source.encode("utf-8")
-                            ).hexdigest(),
-                        )
-                        apply_categorization_rules(created)
-                statement.status = StatementImport.Status.REVIEW
-                statement.save(update_fields=["status", "updated_at"])
-                store_reconciliation(statement, parsed_statement)
-                document.processing_status = Document.ProcessingStatus.REVIEW
-                document.save(update_fields=["processing_status", "updated_at"])
-                messages.success(request, f"{len(parsed)} Buchungen erkannt. Bitte jetzt prüfen.")
-                return redirect("statement_review", pk=statement.pk)
-            except Exception as exc:
-                statement.status = StatementImport.Status.FAILED
-                statement.error_message = str(exc)
-                statement.save(update_fields=["status", "error_message", "updated_at"])
-                document.processing_status = Document.ProcessingStatus.FAILED
-                document.processing_error = str(exc)
-                document.save(update_fields=[
-                    "processing_status", "processing_error", "updated_at"
-                ])
-                messages.error(request, "Der Kontoauszug konnte nicht verarbeitet werden.")
-                return redirect("dashboard")
-        try:
-            process_document(document)
-            messages.success(request, "Dokument wurde lokal analysiert. Bitte Angaben prüfen.")
-            return redirect("document_review", pk=document.pk)
-        except Exception:
-            messages.error(request, "Die lokale Dokumentanalyse ist fehlgeschlagen.")
-            return redirect("document_review", pk=document.pk)
+            process_statement_task.delay(statement.pk)
+            messages.success(request, "Kontoauszug wurde zur Hintergrundverarbeitung vorgemerkt.")
+            return redirect("dashboard")
+        process_document_task.delay(document.pk)
+        messages.success(request, "Dokument wurde zur Hintergrundverarbeitung vorgemerkt.")
+        return redirect("dashboard")
     else:
         details = " ".join(error for errors in form.errors.values() for error in errors)
         messages.error(request, f"Das Dokument konnte nicht gespeichert werden: {details}")
     return redirect("dashboard")
 
 
+@login_required
 def statement_review(request, pk):
     statement = get_object_or_404(
         StatementImport.objects.select_related("document", "account"), pk=pk
@@ -159,6 +117,7 @@ def statement_review(request, pk):
     })
 
 
+@login_required
 def transaction_overview(request):
     queryset = (
         Transaction.objects.filter(reviewed=True)
@@ -262,6 +221,7 @@ def _create_rules_from_transactions(transactions, bulk):
         rule.people.add(*bulk["people"])
 
 
+@login_required
 def manage_classification(request):
     forms = {
         "category": CategoryForm(prefix="category"),
@@ -295,6 +255,7 @@ def manage_classification(request):
     })
 
 
+@login_required
 def toggle_classification(request, kind, pk):
     if request.method != "POST":
         return redirect("manage_classification")
@@ -309,6 +270,7 @@ def toggle_classification(request, kind, pk):
     return redirect("manage_classification")
 
 
+@login_required
 def document_review(request, pk):
     document = get_object_or_404(
         Document.objects.select_related("category").prefetch_related("tags", "people", "transactions"),
@@ -317,11 +279,8 @@ def document_review(request, pk):
     candidates = document_transaction_candidates(document)
     if request.method == "POST":
         if request.POST.get("action") == "retry":
-            try:
-                process_document(document)
-                messages.success(request, "Dokument wurde erneut analysiert.")
-            except Exception:
-                messages.error(request, "Die erneute Analyse ist fehlgeschlagen.")
+            process_document_task.delay(document.pk)
+            messages.success(request, "Erneute Analyse wurde vorgemerkt.")
             return redirect("document_review", pk=document.pk)
         review_form = DocumentReviewForm(request.POST, instance=document, prefix="document")
         link_form = DocumentTransactionLinkForm(
@@ -348,6 +307,7 @@ def document_review(request, pk):
     })
 
 
+@login_required
 def document_archive(request):
     queryset = Document.objects.select_related("category").prefetch_related(
         "tags", "people", "transactions"
@@ -383,3 +343,19 @@ def document_archive(request):
         "documents": documents,
         "filters": filters,
     })
+
+
+@login_required
+def document_download(request, pk):
+    document = get_object_or_404(Document, pk=pk)
+    content_type = mimetypes.guess_type(document.original_filename)[0] or "application/octet-stream"
+    return FileResponse(
+        document.file.open("rb"),
+        as_attachment=request.GET.get("download") == "1",
+        filename=document.original_filename,
+        content_type=content_type,
+    )
+
+
+def health(request):
+    return HttpResponse("ok", content_type="text/plain")

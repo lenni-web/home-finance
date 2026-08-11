@@ -1,0 +1,31 @@
+services:
+  web:
+    command: >-
+      sh -c "python manage.py migrate &&
+      python manage.py collectstatic --noinput &&
+      gunicorn config.wsgi:application --bind 0.0.0.0:8000
+      --workers $${GUNICORN_WORKERS:-2} --timeout 120 --access-logfile - --error-logfile -"
+    volumes:
+      - documents:/app/media
+      - staticfiles:/app/staticfiles
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  worker:
+    volumes:
+      - documents:/app/media
+    restart: unless-stopped
+
+  db:
+    restart: unless-stopped
+
+  redis:
+    restart: unless-stopped
+
+volumes:
+  staticfiles:

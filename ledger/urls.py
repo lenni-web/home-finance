@@ -8,6 +8,7 @@ urlpatterns = [
     path("documents/upload/", views.upload_document, name="upload_document"),
     path("documents/", views.document_archive, name="document_archive"),
     path("documents/<int:pk>/review/", views.document_review, name="document_review"),
+    path("documents/<int:pk>/file/", views.document_download, name="document_download"),
     path("statements/<int:pk>/review/", views.statement_review, name="statement_review"),
     path("transactions/", views.transaction_overview, name="transaction_overview"),
     path("settings/classification/", views.manage_classification, name="manage_classification"),
@@ -16,4 +17,5 @@ urlpatterns = [
         views.toggle_classification,
         name="toggle_classification",
     ),
+    path("health/", views.health, name="health"),
 ]

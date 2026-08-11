@@ -24,7 +24,7 @@
   {% for message in messages %}<div class="card">{{ message }}</div>{% endfor %}
   {% if document.processing_error %}<div class="card error">{{ document.processing_error }}</div>{% endif %}
   <div class="grid">
-    <section class="card"><h2>Original</h2>{% if document.file.name|lower|slice:"-4:" == ".pdf" %}<iframe src="{{ document.file.url }}" title="Dokumentvorschau"></iframe>{% else %}<img class="image-preview" src="{{ document.file.url }}" alt="Dokumentvorschau">{% endif %}<p><a href="{{ document.file.url }}" download>Original herunterladen</a></p></section>
+    <section class="card"><h2>Original</h2>{% if document.file.name|lower|slice:"-4:" == ".pdf" %}<iframe src="{% url 'document_download' document.pk %}" title="Dokumentvorschau"></iframe>{% else %}<img class="image-preview" src="{% url 'document_download' document.pk %}" alt="Dokumentvorschau">{% endif %}<p><a href="{% url 'document_download' document.pk %}?download=1">Original herunterladen</a></p></section>
     <section class="card"><h2>Erkannte Angaben</h2><form method="post">{% csrf_token %}{{ review_form.as_p }}{{ link_form.as_p }}<button name="action" value="save">Speichern und abschließen</button>{% if document.kind != "bank_statement" %} <button class="secondary" name="action" value="retry">Erneut analysieren</button>{% endif %}</form></section>
   </div>
   <details class="card"><summary>Erkannten Text anzeigen</summary><pre>{{ document.extracted_text }}</pre></details>

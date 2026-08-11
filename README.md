@@ -25,16 +25,51 @@ Danach liegt die Oberfläche unter `http://localhost:8000`. Für die Verwaltung:
 docker compose exec web python manage.py createsuperuser
 ```
 
-## Übertragung auf Debian
+Alle fachlichen Seiten und Dokumentdownloads erfordern eine Anmeldung. Der erste
+Superuser kann sich anschließend unter `/accounts/login/` anmelden. Originaldokumente
+werden ausschließlich über eine authentifizierte Django-Route ausgeliefert.
 
-1. Git-Repository auf den Server klonen.
-2. `.env` nur auf dem Server anlegen.
-3. `docker compose up -d --build` ausführen.
-4. Bei Updates zuerst Backup erstellen, dann das gewünschte Git-Tag auschecken.
-5. `docker compose up -d --build`; Migrationen werden beim Start angewendet.
+## Produktionsbetrieb auf Debian (bewusst ohne HTTPS)
 
-Produktiv kommen HTTPS, ein Reverse Proxy, regelmäßige Backups und ein separater
-Hintergrundprozess für OCR hinzu.
+Voraussetzungen sind Docker Engine, das Compose-Plugin und Git. Auf dem Server:
+
+```bash
+cp .env.production.example .env
+# Alle Platzhalter, Host/IP und Passwörter in .env ändern
+./scripts/start-production.sh
+docker compose -f compose.yaml -f compose.prod.yaml exec web \
+  python manage.py createsuperuser
+```
+
+Die Anwendung läuft über Gunicorn auf `http://SERVER-IP:8000`. Ohne HTTPS darf sie nur
+in einem vertrauenswürdigen lokalen Netz oder über ein VPN erreichbar sein. Sie sollte
+nicht direkt ins Internet freigegeben werden. `DJANGO_SECURE_COOKIES` bleibt ohne HTTPS
+auf `0`; bei einer späteren HTTPS-Einrichtung muss es auf `1` gesetzt werden.
+
+Der Worker verarbeitet OCR und Kontoauszüge unabhängig vom Webprozess. Redis dient nur
+als lokale Aufgabenwarteschlange; PostgreSQL und Dokumente liegen in eigenen Volumes.
+
+## Backup und Wiederherstellung
+
+Ein vollständiges Backup enthält PostgreSQL, alle Originaldokumente und eine Kopie der
+aktuellen `.env`. Es erhält Dateirechte `0600` und gehört wegen der enthaltenen
+Finanzdaten zusätzlich verschlüsselt beziehungsweise auf einen verschlüsselten
+Datenträger:
+
+```bash
+./scripts/backup.sh
+```
+
+Standardziel ist `backups/`; ein anderes Ziel kann mit `BACKUP_DIR=/sicherer/pfad`
+gesetzt werden. Wiederherstellen ersetzt Datenbank und Dokumentarchiv vollständig und
+verlangt deshalb eine ausdrückliche Bestätigung:
+
+```bash
+./scripts/restore.sh --yes /absoluter/pfad/home-finance-DATUM.tar.gz
+```
+
+Die im Backup enthaltene `environment.env` wird nicht automatisch über die aktuelle
+`.env` geschrieben. Prüfsummen werden vor jeder Wiederherstellung kontrolliert.
 
 ## Nächster Entwicklungsschritt
 
@@ -101,7 +136,7 @@ python -m tools.validate_ing_pdf "/lokaler/pfad/Kontoauszug.pdf" \
 
 1. Auf der Startseite unter `Konto anlegen` einen frei gewählten Kontonamen erfassen.
 2. Auf der Startseite Dokumenttyp `Kontoauszug` und das Konto auswählen.
-3. Das ING-PDF hochladen; die Verarbeitung erfolgt lokal und synchron.
+3. Das ING-PDF hochladen; die Verarbeitung erfolgt lokal im Hintergrund.
 4. Erkannte Buchungen in der Kontrolltabelle korrigieren oder zwischenspeichern.
 5. Erst `Alle Buchungen bestätigen` markiert den Auszug als importiert.
 
@@ -134,8 +169,10 @@ passende Kontobewegungen verknüpft werden. Kandidaten werden anhand eines Zeitf
 von sieben Tagen und – sofern erkannt – des Betrags eingeschränkt.
 
 Unter `/documents/` steht das nach Monat sortierte Archiv mit Volltextsuche, Filtern,
-Vorschau und Download zur Verfügung. Die OCR läuft im aktuellen Prototyp synchron; bei
-größeren Dokumenten kann der Upload deshalb einige Zeit benötigen.
+Vorschau und Download zur Verfügung. OCR und Kontoauszugsimport laufen über den
+separaten Hintergrund-Worker. Uploads werden sofort angenommen; der Status wechselt
+anschließend von `Ausstehend` über `Wird verarbeitet` zu `Prüfung erforderlich` oder
+`Fehlgeschlagen`.
 
 Die Reihenfolge von Beleg und Kontoauszug ist unerheblich: Wird ein Kontoauszug erst
 später bestätigt, prüft die Anwendung alle bisher unverknüpften Belege mit erkanntem
