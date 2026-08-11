@@ -18,6 +18,7 @@ from .document_matching import document_transaction_candidates, refresh_unmatche
 from .importers import INGStatementParser
 from .models import CategorizationRule, Category, Document, Person, StatementImport, Tag, Transaction
 from .rules import apply_categorization_rules, matching_rules
+from .statement_reconciliation import store_reconciliation
 
 
 def dashboard(request):
@@ -66,7 +67,8 @@ def upload_document(request):
                 status=StatementImport.Status.PROCESSING,
             )
             try:
-                parsed = INGStatementParser().parse_pdf(Path(document.file.path))
+                parsed_statement = INGStatementParser().parse_statement_pdf(Path(document.file.path))
+                parsed = parsed_statement.transactions
                 if not parsed:
                     raise ValueError("Im PDF wurden keine Buchungen erkannt.")
                 with transaction.atomic():
@@ -92,6 +94,7 @@ def upload_document(request):
                         apply_categorization_rules(created)
                 statement.status = StatementImport.Status.REVIEW
                 statement.save(update_fields=["status", "updated_at"])
+                store_reconciliation(statement, parsed_statement)
                 document.processing_status = Document.ProcessingStatus.REVIEW
                 document.save(update_fields=["processing_status", "updated_at"])
                 messages.success(request, f"{len(parsed)} Buchungen erkannt. Bitte jetzt prüfen.")

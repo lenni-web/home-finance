@@ -11,11 +11,12 @@ from django.urls import reverse
 
 from .document_processing import _parse_date, _parse_merchant, _parse_total
 from .document_matching import refresh_unmatched_document_reviews
-from .importers import ParsedTransaction
+from .importers import ParsedStatement, ParsedTransaction
 from .models import (
     Account, CategorizationRule, Category, Document, Person, StatementImport, Tag, Transaction,
 )
 from .rules import apply_categorization_rules
+from .statement_reconciliation import store_reconciliation
 
 
 class DocumentModelTests(TestCase):
@@ -72,9 +73,9 @@ class StatementWorkflowTests(TestCase):
             fields_per_transaction * expected_large_statement,
         )
 
-    @patch("ledger.views.INGStatementParser.parse_pdf")
-    def test_statement_upload_creates_review_batch(self, parse_pdf):
-        parse_pdf.return_value = [ParsedTransaction(
+    @patch("ledger.views.INGStatementParser.parse_statement_pdf")
+    def test_statement_upload_creates_review_batch(self, parse_statement_pdf):
+        parse_statement_pdf.return_value = ParsedStatement(transactions=[ParsedTransaction(
             booking_date="2026-07-01",
             value_date="2026-07-02",
             booking_type="Lastschrift",
@@ -83,7 +84,7 @@ class StatementWorkflowTests(TestCase):
             amount="-10.00",
             currency="EUR",
             source_page=1,
-        )]
+        )], opening_balance=Decimal("100.00"), closing_balance=Decimal("90.00"))
         with tempfile.TemporaryDirectory() as media_root:
             with override_settings(MEDIA_ROOT=Path(media_root)):
                 response = self.client.post(reverse("upload_document"), {
@@ -97,6 +98,10 @@ class StatementWorkflowTests(TestCase):
         statement = StatementImport.objects.get()
         self.assertRedirects(response, reverse("statement_review", args=[statement.pk]))
         self.assertEqual(statement.status, StatementImport.Status.REVIEW)
+        self.assertEqual(
+            statement.reconciliation_status, StatementImport.ReconciliationStatus.BALANCED
+        )
+        self.assertEqual(statement.reconciliation_difference, Decimal("0.00"))
         self.assertEqual(statement.transactions.count(), 1)
         self.assertFalse(statement.transactions.get().reviewed)
 
@@ -428,3 +433,37 @@ Gesamt 12,34 EUR
         response = self.client.get(reverse("document_review", args=[receipt.pk]))
         self.assertContains(response, "Musterladen")
         self.assertContains(response, str(transaction.amount))
+
+
+class StatementReconciliationTests(TestCase):
+    def setUp(self):
+        account = Account.objects.create(name="Saldo-Konto")
+        document = Document.objects.create(
+            kind=Document.Kind.BANK_STATEMENT,
+            original_filename="saldo.pdf",
+            file=SimpleUploadedFile("saldo.pdf", b"%PDF-saldo", "application/pdf"),
+        )
+        self.statement = StatementImport.objects.create(document=document, account=account)
+
+    def test_marks_balance_mismatch(self):
+        parsed = ParsedStatement(
+            transactions=[], opening_balance=Decimal("100.00"), closing_balance=Decimal("90.00")
+        )
+
+        store_reconciliation(self.statement, parsed)
+
+        self.assertEqual(
+            self.statement.reconciliation_status, StatementImport.ReconciliationStatus.MISMATCH
+        )
+        self.assertEqual(self.statement.reconciliation_difference, Decimal("10.00"))
+
+    def test_marks_missing_balances_unavailable(self):
+        parsed = ParsedStatement(transactions=[], opening_balance=None, closing_balance=None)
+
+        store_reconciliation(self.statement, parsed)
+
+        self.assertEqual(
+            self.statement.reconciliation_status,
+            StatementImport.ReconciliationStatus.UNAVAILABLE,
+        )
+        self.assertIsNone(self.statement.reconciliation_difference)

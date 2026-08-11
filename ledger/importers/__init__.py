@@ -1,4 +1,3 @@
-from .ing import INGStatementParser, ParsedTransaction
+from .ing import INGStatementParser, ParsedStatement, ParsedTransaction
 
-__all__ = ["INGStatementParser", "ParsedTransaction"]
-
+__all__ = ["INGStatementParser", "ParsedStatement", "ParsedTransaction"]

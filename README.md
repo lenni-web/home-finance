@@ -141,3 +141,21 @@ Die Reihenfolge von Beleg und Kontoauszug ist unerheblich: Wird ein Kontoauszug 
 später bestätigt, prüft die Anwendung alle bisher unverknüpften Belege mit erkanntem
 Datum und Betrag erneut. Mögliche Treffer werden als `Prüfung erforderlich` markiert,
 aber aus Sicherheitsgründen nicht ohne Bestätigung fest verknüpft.
+
+## Saldenprüfung von Kontoauszügen
+
+Bei ING-Auszügen werden `Alter Saldo` und der letzte `Neue Saldo` als Kontrollwerte am
+Import gespeichert. Zusätzlich speichert die Anwendung die Summe aller erkannten
+Buchungen und die rechnerische Differenz:
+
+```text
+Anfangssaldo + Buchungssumme - Endsaldo = Differenz
+```
+
+Der Status lautet `Ausgeglichen`, `Abweichung` oder `Nicht prüfbar`. Salden werden nie
+als Einnahme oder Ausgabe behandelt. Vorhandene Importe können ohne erneuten Upload
+lokal nachberechnet werden:
+
+```bash
+docker compose exec web python manage.py reconcile_statements
+```

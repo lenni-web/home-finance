@@ -10,6 +10,10 @@ from pypdf import PdfReader
 
 DATE_RE = re.compile(r"^\d{2}\.\d{2}\.\d{4}$")
 AMOUNT_RE = re.compile(r"^-?(?:\d{1,3}(?:\.\d{3})*|\d+),\d{2}$")
+BALANCE_AMOUNT_RE = re.compile(
+    r"^(-?(?:\d{1,3}(?:\.\d{3})*|\d+),\d{2})(?:\s+Euro)?$",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -33,6 +37,25 @@ class ParsedTransaction:
 
     def to_dict(self):
         return asdict(self)
+
+
+@dataclass(frozen=True)
+class ParsedStatement:
+    transactions: list[ParsedTransaction]
+    opening_balance: Decimal | None
+    closing_balance: Decimal | None
+
+    @property
+    def transaction_total(self):
+        return sum((Decimal(item.amount) for item in self.transactions), Decimal("0.00"))
+
+    @property
+    def reconciliation_difference(self):
+        if self.opening_balance is None or self.closing_balance is None:
+            return None
+        return (self.opening_balance + self.transaction_total - self.closing_balance).quantize(
+            Decimal("0.01")
+        )
 
 
 class INGStatementParser:
@@ -164,6 +187,9 @@ class INGStatementParser:
         return self.parse_fragments(pages)
 
     def parse_pdf(self, pdf_path: Path) -> list[ParsedTransaction]:
+        return self.parse_statement_pdf(pdf_path).transactions
+
+    def parse_statement_pdf(self, pdf_path: Path) -> ParsedStatement:
         reader = PdfReader(pdf_path)
         if reader.is_encrypted:
             raise ValueError("Der Kontoauszug ist verschlüsselt.")
@@ -182,4 +208,26 @@ class INGStatementParser:
 
             page.extract_text(visitor_text=visit_text)
             pages.append(fragments)
-        return self.parse_fragments(pages)
+        opening_balance, closing_balance = self.extract_balances(pages)
+        return ParsedStatement(
+            transactions=self.parse_fragments(pages),
+            opening_balance=opening_balance,
+            closing_balance=closing_balance,
+        )
+
+    @classmethod
+    def extract_balances(cls, pages: list[list[TextFragment]]):
+        candidates: list[tuple[str, Decimal]] = []
+        for fragments in pages:
+            for index, fragment in enumerate(fragments):
+                label = fragment.text.strip()
+                if label not in {"Alter Saldo", "Neuer Saldo"}:
+                    continue
+                for candidate in fragments[index + 1:index + 5]:
+                    match = BALANCE_AMOUNT_RE.fullmatch(candidate.text.strip())
+                    if match:
+                        candidates.append((label, Decimal(cls._amount(match.group(1)))))
+                        break
+        opening = next((value for label, value in candidates if label == "Alter Saldo"), None)
+        closing_values = [value for label, value in candidates if label == "Neuer Saldo"]
+        return opening, (closing_values[-1] if closing_values else None)

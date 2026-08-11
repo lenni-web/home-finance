@@ -1,4 +1,5 @@
 from unittest import TestCase
+from decimal import Decimal
 
 from ledger.importers.ing import INGStatementParser, TextFragment
 
@@ -50,3 +51,19 @@ class INGStatementParserTests(TestCase):
 
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].description, "Referenz:\nABC")
+
+    def test_extracts_opening_and_last_closing_balance(self):
+        pages = [[
+            TextFragment(1, 311.7, 627.3, "Alter Saldo"),
+            TextFragment(1, 0, 0, " 1.000,00 Euro"),
+            TextFragment(1, 311.7, 615.0, "Neuer Saldo"),
+            TextFragment(1, 0, 0, " 900,00 Euro"),
+        ], [
+            TextFragment(14, 141.6, 572.4, "Neuer Saldo"),
+            TextFragment(14, 0, 0, " 875,50"),
+        ]]
+
+        opening, closing = INGStatementParser.extract_balances(pages)
+
+        self.assertEqual(opening, Decimal("1000.00"))
+        self.assertEqual(closing, Decimal("875.50"))

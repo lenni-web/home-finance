@@ -139,12 +139,28 @@ class StatementImport(TimestampedModel):
         IMPORTED = "imported", "Importiert"
         FAILED = "failed", "Fehlgeschlagen"
 
+    class ReconciliationStatus(models.TextChoices):
+        UNAVAILABLE = "unavailable", "Nicht prüfbar"
+        BALANCED = "balanced", "Ausgeglichen"
+        MISMATCH = "mismatch", "Abweichung"
+
     document = models.OneToOneField(Document, on_delete=models.PROTECT)
     account = models.ForeignKey(Account, on_delete=models.PROTECT)
     parser_name = models.CharField(max_length=100, blank=True)
     parser_version = models.PositiveIntegerField(default=1)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.UPLOADED)
     error_message = models.TextField(blank=True)
+    opening_balance = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    closing_balance = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    transaction_total = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    reconciliation_difference = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True
+    )
+    reconciliation_status = models.CharField(
+        max_length=20,
+        choices=ReconciliationStatus.choices,
+        default=ReconciliationStatus.UNAVAILABLE,
+    )
 
 
 class Transaction(TimestampedModel):
