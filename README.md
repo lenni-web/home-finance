@@ -68,3 +68,14 @@ python tools/sanitize_statement.py \
 
 Die erzeugte JSON-Datei vor dem Weitergeben immer noch einmal manuell durchsuchen.
 Der Ordner `sanitized/` ist absichtlich von Git ausgeschlossen.
+
+Die anonymisierte Struktur lässt sich anschließend lokal prüfen:
+
+```bash
+python -m tools.inspect_ing_fixture sanitized/ing-layout.json \
+  --output sanitized/ing-transactions.json
+```
+
+Der ING-Parser verwendet die Lesereihenfolge des PDFs und sichert Buchungs- und
+Valutadatum zusätzlich über die Position der linken Datumsspalte ab. Informationsseiten
+ohne diese Struktur werden ignoriert.
