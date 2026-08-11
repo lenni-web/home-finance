@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ausgabenarchiv</title>
+  <style>
+    :root { font-family: system-ui, sans-serif; color: #1f2937; background: #f8fafc; }
+    body { max-width: 1120px; margin: auto; padding: 2rem; }
+    header, .grid { display: flex; justify-content: space-between; gap: 1.5rem; }
+    .card { background: white; border: 1px solid #e2e8f0; border-radius: 14px; padding: 1.25rem; margin: 1rem 0; }
+    .grid > * { flex: 1; } table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: .7rem; border-bottom: 1px solid #e2e8f0; }
+    label { display: block; margin-top: .65rem; font-weight: 600; }
+    input, select { width: 100%; box-sizing: border-box; padding: .6rem; }
+    button { margin-top: 1rem; padding: .7rem 1rem; border: 0; border-radius: 8px; background: #0f766e; color: white; }
+    .tag { display: inline-block; padding: .15rem .45rem; border-radius: 999px; background: #ccfbf1; font-size: .8rem; }
+    @media (max-width: 760px) { .grid, header { display: block; } body { padding: 1rem; } }
+  </style>
+</head>
+<body>
+  <header><div><h1>Ausgabenarchiv</h1><p>Belege und Kontoauszüge an einem Ort.</p></div><a href="/admin/">Verwaltung</a></header>
+  {% for message in messages %}<div class="card">{{ message }}</div>{% endfor %}
+  <div class="grid">
+    <section class="card"><h2>Dokument hochladen</h2><form method="post" enctype="multipart/form-data" action="{% url 'upload_document' %}">{% csrf_token %}{{ upload_form.as_p }}<button>Hochladen</button></form></section>
+    <section class="card"><h2>Archivmonate</h2>{% for item in months %}<p>{{ item.month|date:"F Y" }}</p>{% empty %}<p>Noch keine Dokumente.</p>{% endfor %}</section>
+  </div>
+  <section class="card"><h2>Neueste Dokumente</h2><table><thead><tr><th>Datum</th><th>Dokument</th><th>Kategorie</th><th>Tags</th></tr></thead><tbody>
+    {% for document in documents %}<tr><td>{{ document.document_date|default:"–" }}</td><td><a href="{{ document.file.url }}">{{ document }}</a></td><td>{{ document.category|default:"–" }}</td><td>{% for tag in document.tags.all %}<span class="tag">{{ tag }}</span> {% endfor %}</td></tr>{% empty %}<tr><td colspan="4">Noch keine Dokumente.</td></tr>{% endfor %}
+  </tbody></table></section>
+</body></html>
+
