@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dokumentenarchiv</title>
+  <style>
+    :root { font-family:system-ui,sans-serif; color:#1f2937; background:#f8fafc; }
+    body { max-width:1250px; margin:auto; padding:1.5rem; }
+    header,.filters { display:flex; justify-content:space-between; gap:1rem; }
+    .filters { flex-wrap:wrap; } .filters p { flex:1; min-width:150px; margin:0; }
+    .card { background:white; border:1px solid #e2e8f0; border-radius:14px; padding:1rem; margin:1rem 0; }
+    label { display:block; font-weight:650; font-size:.82rem; } input,select { width:100%; box-sizing:border-box; padding:.5rem; }
+    table { width:100%; border-collapse:collapse; } th,td { text-align:left; padding:.65rem; border-bottom:1px solid #e2e8f0; }
+    button { border:0; border-radius:8px; padding:.65rem .9rem; background:#0f766e; color:white; }
+    .tag { display:inline-block; padding:.15rem .4rem; background:#ccfbf1; border-radius:999px; font-size:.78rem; }
+    .status { color:#64748b; font-size:.82rem; } @media(max-width:800px){header,.filters{display:block;} .table-wrap{overflow:auto;}}
+  </style>
+</head>
+<body>
+  <header><div><h1>Dokumentenarchiv</h1><p>Belege, Rechnungen und Kontoauszüge nach Monat.</p></div><nav><a href="{% url 'dashboard' %}">Übersicht</a> · <a href="{% url 'transaction_overview' %}">Buchungen</a></nav></header>
+  {% for message in messages %}<div class="card">{{ message }}</div>{% endfor %}
+  <section class="card"><form method="get"><div class="filters">{{ filters.as_p }}</div><p><button>Filtern</button> <a href="{% url 'document_archive' %}">Zurücksetzen</a></p></form></section>
+  {% regroup documents by archive_month as month_groups %}
+  {% for group in month_groups %}<section class="card table-wrap"><h2>{{ group.grouper }}</h2><table><thead><tr><th>Datum</th><th>Dokument</th><th>Händler</th><th>Betrag</th><th>Zuordnung</th><th></th></tr></thead><tbody>
+    {% for document in group.list %}<tr><td>{{ document.document_date|date:"d.m.Y"|default:"–" }}</td><td><a href="{% url 'document_review' document.pk %}">{{ document }}</a><div class="status">{{ document.get_kind_display }} · {{ document.get_processing_status_display }}</div></td><td>{{ document.merchant|default:"–" }}</td><td>{% if document.total_amount != None %}{{ document.total_amount|floatformat:2 }} €{% else %}–{% endif %}</td><td>{{ document.category|default:"–" }}{% for tag in document.tags.all %} <span class="tag">{{ tag }}</span>{% endfor %}{% for person in document.people.all %} · {{ person }}{% endfor %}{% if document.transactions.count %}<div class="status">{{ document.transactions.count }} Kontobewegung(en)</div>{% endif %}</td><td><a href="{{ document.file.url }}" download>Download</a></td></tr>{% endfor %}
+  </tbody></table></section>{% empty %}<section class="card">Keine Dokumente gefunden.</section>{% endfor %}
+</body></html>

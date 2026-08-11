@@ -1,4 +1,5 @@
 import hashlib
+from datetime import timedelta
 from pathlib import Path
 
 from django.contrib import messages
@@ -9,9 +10,11 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import (
     AccountForm, BulkCategorizationForm, CategorizationRuleForm, CategoryForm,
+    DocumentArchiveFilterForm, DocumentReviewForm, DocumentTransactionLinkForm,
     DocumentUploadForm, PersonForm, TagForm, TransactionCategorizationFormSet,
     TransactionFilterForm, TransactionReviewFormSet,
 )
+from .document_processing import process_document
 from .importers import INGStatementParser
 from .models import CategorizationRule, Category, Document, Person, StatementImport, Tag, Transaction
 from .rules import apply_categorization_rules, matching_rules
@@ -89,15 +92,28 @@ def upload_document(request):
                         apply_categorization_rules(created)
                 statement.status = StatementImport.Status.REVIEW
                 statement.save(update_fields=["status", "updated_at"])
+                document.processing_status = Document.ProcessingStatus.REVIEW
+                document.save(update_fields=["processing_status", "updated_at"])
                 messages.success(request, f"{len(parsed)} Buchungen erkannt. Bitte jetzt prüfen.")
                 return redirect("statement_review", pk=statement.pk)
             except Exception as exc:
                 statement.status = StatementImport.Status.FAILED
                 statement.error_message = str(exc)
                 statement.save(update_fields=["status", "error_message", "updated_at"])
+                document.processing_status = Document.ProcessingStatus.FAILED
+                document.processing_error = str(exc)
+                document.save(update_fields=[
+                    "processing_status", "processing_error", "updated_at"
+                ])
                 messages.error(request, "Der Kontoauszug konnte nicht verarbeitet werden.")
                 return redirect("dashboard")
-        messages.success(request, "Dokument wurde ins Archiv aufgenommen.")
+        try:
+            process_document(document)
+            messages.success(request, "Dokument wurde lokal analysiert. Bitte Angaben prüfen.")
+            return redirect("document_review", pk=document.pk)
+        except Exception:
+            messages.error(request, "Die lokale Dokumentanalyse ist fehlgeschlagen.")
+            return redirect("document_review", pk=document.pk)
     else:
         details = " ".join(error for errors in form.errors.values() for error in errors)
         messages.error(request, f"Das Dokument konnte nicht gespeichert werden: {details}")
@@ -121,6 +137,8 @@ def statement_review(request, pk):
                 queryset.update(reviewed=True)
                 statement.status = StatementImport.Status.IMPORTED
                 statement.save(update_fields=["status", "updated_at"])
+                statement.document.processing_status = Document.ProcessingStatus.PROCESSED
+                statement.document.save(update_fields=["processing_status", "updated_at"])
                 messages.success(request, f"{queryset.count()} Buchungen wurden übernommen.")
                 return redirect("dashboard")
             messages.success(request, "Korrekturen wurden gespeichert.")
@@ -282,3 +300,96 @@ def toggle_classification(request, kind, pk):
     item.save(update_fields=["active", "updated_at"])
     messages.success(request, f"„{item}“ wurde {'aktiviert' if item.active else 'deaktiviert'}.")
     return redirect("manage_classification")
+
+
+def _document_transaction_candidates(document):
+    queryset = Transaction.objects.filter(reviewed=True).select_related("statement_import__account")
+    if document.document_date:
+        queryset = queryset.filter(
+            booking_date__range=(
+                document.document_date - timedelta(days=7),
+                document.document_date + timedelta(days=7),
+            )
+        )
+    if document.total_amount is not None:
+        amount = abs(document.total_amount)
+        exact = queryset.filter(Q(amount=amount) | Q(amount=-amount))
+        if exact.exists():
+            queryset = exact
+    return queryset.order_by("-booking_date", "-id")
+
+
+def document_review(request, pk):
+    document = get_object_or_404(
+        Document.objects.select_related("category").prefetch_related("tags", "people", "transactions"),
+        pk=pk,
+    )
+    candidates = _document_transaction_candidates(document)
+    if request.method == "POST":
+        if request.POST.get("action") == "retry":
+            try:
+                process_document(document)
+                messages.success(request, "Dokument wurde erneut analysiert.")
+            except Exception:
+                messages.error(request, "Die erneute Analyse ist fehlgeschlagen.")
+            return redirect("document_review", pk=document.pk)
+        review_form = DocumentReviewForm(request.POST, instance=document, prefix="document")
+        link_form = DocumentTransactionLinkForm(
+            request.POST, queryset=candidates, prefix="links"
+        )
+        if review_form.is_valid() and link_form.is_valid():
+            document = review_form.save()
+            document.transactions.set(link_form.cleaned_data["transactions"])
+            document.processing_status = Document.ProcessingStatus.PROCESSED
+            document.save(update_fields=["processing_status", "updated_at"])
+            messages.success(request, "Dokument und Zuordnung wurden gespeichert.")
+            return redirect("document_archive")
+    else:
+        review_form = DocumentReviewForm(instance=document, prefix="document")
+        link_form = DocumentTransactionLinkForm(
+            queryset=candidates,
+            prefix="links",
+            initial={"transactions": document.transactions.all()},
+        )
+    return render(request, "ledger/document_review.html", {
+        "document": document,
+        "review_form": review_form,
+        "link_form": link_form,
+    })
+
+
+def document_archive(request):
+    queryset = Document.objects.select_related("category").prefetch_related(
+        "tags", "people", "transactions"
+    ).order_by("-document_date", "-created_at")
+    filters = DocumentArchiveFilterForm(request.GET)
+    if filters.is_valid():
+        values = filters.cleaned_data
+        if values.get("month"):
+            try:
+                year, month = map(int, values["month"].split("-"))
+                queryset = queryset.filter(document_date__year=year, document_date__month=month)
+            except (TypeError, ValueError):
+                filters.add_error("month", "Bitte einen gültigen Monat auswählen.")
+        if values.get("kind"):
+            queryset = queryset.filter(kind=values["kind"])
+        if values.get("tag"):
+            queryset = queryset.filter(tags=values["tag"])
+        if values.get("person"):
+            queryset = queryset.filter(people=values["person"])
+        if values.get("q"):
+            queryset = queryset.filter(
+                Q(title__icontains=values["q"])
+                | Q(merchant__icontains=values["q"])
+                | Q(original_filename__icontains=values["q"])
+                | Q(extracted_text__icontains=values["q"])
+            )
+    documents = list(queryset.distinct())
+    for document in documents:
+        document.archive_month = (
+            document.document_date.strftime("%m/%Y") if document.document_date else "Ohne Datum"
+        )
+    return render(request, "ledger/document_archive.html", {
+        "documents": documents,
+        "filters": filters,
+    })

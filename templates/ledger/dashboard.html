@@ -19,7 +19,7 @@
   </style>
 </head>
 <body>
-  <header><div><h1>Ausgabenarchiv</h1><p>Belege und Kontoauszüge an einem Ort.</p></div><nav><a href="{% url 'transaction_overview' %}">Buchungen</a> · <a href="{% url 'manage_classification' %}">Kategorien & Regeln</a> · <a href="/admin/">Admin</a></nav></header>
+  <header><div><h1>Ausgabenarchiv</h1><p>Belege und Kontoauszüge an einem Ort.</p></div><nav><a href="{% url 'transaction_overview' %}">Buchungen</a> · <a href="{% url 'document_archive' %}">Dokumente</a> · <a href="{% url 'manage_classification' %}">Kategorien & Regeln</a> · <a href="/admin/">Admin</a></nav></header>
   {% for message in messages %}<div class="card">{{ message }}</div>{% endfor %}
   <section class="card"><h2>Konto anlegen</h2><p>Für den ersten Kontoauszug wird zunächst ein Konto benötigt. Es genügt ein frei gewählter Name; die vollständige IBAN wird nicht gespeichert.</p><form method="post" action="{% url 'add_account' %}">{% csrf_token %}{{ account_form.as_p }}<button>Konto anlegen</button></form></section>
   <div class="grid">
@@ -27,7 +27,7 @@
     <section class="card"><h2>Archivmonate</h2>{% for item in months %}<p>{{ item.month|date:"F Y" }}</p>{% empty %}<p>Noch keine Dokumente.</p>{% endfor %}</section>
   </div>
   <section class="card"><h2>Neueste Dokumente</h2><table><thead><tr><th>Datum</th><th>Dokument</th><th>Kategorie</th><th>Tags</th></tr></thead><tbody>
-    {% for document in documents %}<tr><td>{{ document.document_date|default:"–" }}</td><td><a href="{{ document.file.url }}">{{ document }}</a></td><td>{{ document.category|default:"–" }}</td><td>{% for tag in document.tags.all %}<span class="tag">{{ tag }}</span> {% endfor %}</td></tr>{% empty %}<tr><td colspan="4">Noch keine Dokumente.</td></tr>{% endfor %}
+    {% for document in documents %}<tr><td>{{ document.document_date|default:"–" }}</td><td><a href="{% url 'document_review' document.pk %}">{{ document }}</a></td><td>{{ document.category|default:"–" }}</td><td>{% for tag in document.tags.all %}<span class="tag">{{ tag }}</span> {% endfor %}</td></tr>{% empty %}<tr><td colspan="4">Noch keine Dokumente.</td></tr>{% endfor %}
   </tbody></table></section>
   <section class="card"><h2>Kontoauszüge</h2><table><thead><tr><th>Konto</th><th>Dokument</th><th>Status</th><th>Buchungen</th><th></th></tr></thead><tbody>
     {% for statement in statement_imports %}<tr><td>{{ statement.account }}</td><td>{{ statement.document }}</td><td>{{ statement.get_status_display }}</td><td>{{ statement.transactions.count }}</td><td>{% if statement.status == "review" %}<a href="{% url 'statement_review' statement.pk %}">Jetzt prüfen</a>{% endif %}</td></tr>{% empty %}<tr><td colspan="5">Noch keine Kontoauszüge.</td></tr>{% endfor %}

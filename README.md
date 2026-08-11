@@ -121,3 +121,18 @@ nicht automatische Regeln erscheinen als sichtbarer Vorschlag.
 Unter `/settings/classification/` können Kategorien, Tags, Personen und Regeln angelegt
 sowie aktiviert oder deaktiviert werden. Eine Deaktivierung entfernt keine bestehenden
 Zuordnungen.
+
+## Rechnungen und Belege
+
+PDF-, JPG- und PNG-Belege werden beim Upload ausschließlich lokal verarbeitet. Digitale
+PDFs werden direkt gelesen; für Scans und Fotos verwendet der Container Tesseract mit
+deutscher und englischer Sprache sowie OCRmyPDF. Das Original bleibt unverändert.
+
+Datum, Händler und Gesamtbetrag sind Vorschläge und werden vor dem Abschluss auf einer
+Prüfseite angezeigt. Dort können außerdem Kategorie, Tags und Personen vergeben sowie
+passende Kontobewegungen verknüpft werden. Kandidaten werden anhand eines Zeitfensters
+von sieben Tagen und – sofern erkannt – des Betrags eingeschränkt.
+
+Unter `/documents/` steht das nach Monat sortierte Archiv mit Volltextsuche, Filtern,
+Vorschau und Download zur Verfügung. Die OCR läuft im aktuellen Prototyp synchron; bei
+größeren Dokumenten kann der Upload deshalb einige Zeit benötigen.

@@ -1,5 +1,6 @@
 import tempfile
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 from unittest.mock import patch
 
@@ -8,6 +9,7 @@ from django.conf import settings
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
+from .document_processing import _parse_date, _parse_merchant, _parse_total
 from .importers import ParsedTransaction
 from .models import (
     Account, CategorizationRule, Category, Document, Person, StatementImport, Tag, Transaction,
@@ -138,9 +140,11 @@ class StatementWorkflowTests(TestCase):
 
         statement.refresh_from_db()
         item.refresh_from_db()
+        document.refresh_from_db()
         self.assertRedirects(response, reverse("dashboard"))
         self.assertEqual(statement.status, StatementImport.Status.IMPORTED)
         self.assertTrue(item.reviewed)
+        self.assertEqual(document.processing_status, Document.ProcessingStatus.PROCESSED)
 
     def test_review_renders_dates_in_html_date_input_format(self):
         with tempfile.TemporaryDirectory() as media_root:
@@ -291,3 +295,94 @@ class CategorizationWorkflowTests(TestCase):
         category.refresh_from_db()
         self.assertRedirects(response, reverse("manage_classification"))
         self.assertFalse(category.active)
+
+
+class DocumentProcessingTests(TestCase):
+    def test_extracts_receipt_metadata_from_text(self):
+        text = """Musterladen Berlin
+Rechnung
+Rechnungsdatum 05.08.2026
+Zwischensumme 10,00 EUR
+Gesamt 12,34 EUR
+"""
+
+        self.assertEqual(_parse_date(text), date(2026, 8, 5))
+        self.assertEqual(_parse_total(text), Decimal("12.34"))
+        self.assertEqual(_parse_merchant(text), "Musterladen Berlin")
+
+    @patch("ledger.views.process_document")
+    def test_receipt_upload_redirects_to_document_review(self, process):
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=Path(media_root)):
+                response = self.client.post(reverse("upload_document"), {
+                    "kind": Document.Kind.RECEIPT,
+                    "file": SimpleUploadedFile("beleg.png", b"png-test", "image/png"),
+                })
+
+        document = Document.objects.get()
+        self.assertRedirects(response, reverse("document_review", args=[document.pk]))
+        process.assert_called_once_with(document)
+
+    def test_document_can_be_linked_to_matching_transaction(self):
+        account = Account.objects.create(name="ING")
+        statement_document = Document.objects.create(
+            kind=Document.Kind.BANK_STATEMENT,
+            original_filename="statement.pdf",
+            file=SimpleUploadedFile("statement.pdf", b"%PDF-link", "application/pdf"),
+        )
+        statement = StatementImport.objects.create(
+            document=statement_document,
+            account=account,
+            status=StatementImport.Status.IMPORTED,
+        )
+        transaction = Transaction.objects.create(
+            statement_import=statement,
+            booking_date=date(2026, 8, 5),
+            value_date=date(2026, 8, 5),
+            counterparty="Musterladen",
+            amount="-12.34",
+            source_fingerprint="e" * 64,
+            reviewed=True,
+        )
+        receipt = Document.objects.create(
+            kind=Document.Kind.RECEIPT,
+            title="Musterbeleg",
+            original_filename="receipt.pdf",
+            document_date=date(2026, 8, 5),
+            total_amount="12.34",
+            file=SimpleUploadedFile("receipt.pdf", b"%PDF-receipt", "application/pdf"),
+            processing_status=Document.ProcessingStatus.REVIEW,
+        )
+
+        response = self.client.post(reverse("document_review", args=[receipt.pk]), {
+            "document-title": "Musterbeleg",
+            "document-document_date": "2026-08-05",
+            "document-merchant": "Musterladen",
+            "document-total_amount": "12.34",
+            "document-category": "",
+            "document-tags": [],
+            "document-people": [],
+            "links-transactions": [str(transaction.pk)],
+            "action": "save",
+        })
+
+        receipt.refresh_from_db()
+        if response.status_code == 200:
+            self.assertFalse(response.context["review_form"].errors, response.context["review_form"].errors)
+            self.assertFalse(response.context["link_form"].errors, response.context["link_form"].errors)
+        self.assertRedirects(response, reverse("document_archive"))
+        self.assertEqual(receipt.processing_status, Document.ProcessingStatus.PROCESSED)
+        self.assertEqual(receipt.transactions.get(), transaction)
+
+    def test_archive_searches_extracted_text(self):
+        Document.objects.create(
+            kind=Document.Kind.INVOICE,
+            title="Test",
+            original_filename="search.pdf",
+            extracted_text="Unverwechselbarer Suchbegriff",
+            file=SimpleUploadedFile("search.pdf", b"%PDF-search", "application/pdf"),
+        )
+
+        response = self.client.get(reverse("document_archive"), {"q": "Unverwechselbarer"})
+
+        self.assertContains(response, "Test")

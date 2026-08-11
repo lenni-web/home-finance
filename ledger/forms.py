@@ -62,6 +62,63 @@ class DocumentUploadForm(forms.ModelForm):
         return cleaned
 
 
+class DocumentReviewForm(forms.ModelForm):
+    people = forms.ModelMultipleChoiceField(
+        queryset=Person.objects.filter(active=True), required=False,
+        widget=forms.SelectMultiple(attrs={"size": 4}),
+    )
+
+    class Meta:
+        model = Document
+        fields = ["title", "document_date", "merchant", "total_amount", "category", "tags"]
+        widgets = {
+            "document_date": forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
+            "tags": forms.SelectMultiple(attrs={"size": 4}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk:
+            self.fields["people"].initial = self.instance.people.all()
+
+    def save(self, commit=True):
+        document = super().save(commit=commit)
+        if commit:
+            document.people.set(self.cleaned_data["people"])
+        return document
+
+
+class DocumentTransactionLinkForm(forms.Form):
+    transactions = forms.ModelMultipleChoiceField(
+        queryset=Transaction.objects.none(),
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+        label="Passende Kontobewegungen",
+    )
+
+    def __init__(self, *args, queryset=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if queryset is not None:
+            self.fields["transactions"].queryset = queryset
+        self.fields["transactions"].label_from_instance = self.transaction_label
+
+    @staticmethod
+    def transaction_label(item):
+        return f"{item.booking_date:%d.%m.%Y} · {item.counterparty} · {item.amount:.2f} €"
+
+
+class DocumentArchiveFilterForm(forms.Form):
+    month = forms.CharField(required=False, widget=forms.TextInput(attrs={"type": "month"}))
+    kind = forms.ChoiceField(
+        required=False, choices=[("", "Alle Dokumenttypen"), *Document.Kind.choices]
+    )
+    tag = forms.ModelChoiceField(queryset=Tag.objects.all(), required=False, empty_label="Alle Tags")
+    person = forms.ModelChoiceField(
+        queryset=Person.objects.all(), required=False, empty_label="Alle Personen"
+    )
+    q = forms.CharField(required=False, label="Suche")
+
+
 class TransactionReviewForm(forms.ModelForm):
     class Meta:
         model = Transaction

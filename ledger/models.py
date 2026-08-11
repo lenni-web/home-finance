@@ -61,6 +61,13 @@ class Document(TimestampedModel):
         RECEIPT = "receipt", "Kassenbeleg"
         OTHER = "other", "Sonstiges"
 
+    class ProcessingStatus(models.TextChoices):
+        PENDING = "pending", "Ausstehend"
+        PROCESSING = "processing", "Wird verarbeitet"
+        REVIEW = "review", "Prüfung erforderlich"
+        PROCESSED = "processed", "Verarbeitet"
+        FAILED = "failed", "Fehlgeschlagen"
+
     title = models.CharField(max_length=255, blank=True)
     kind = models.CharField(max_length=30, choices=Kind.choices)
     file = models.FileField(upload_to=document_path)
@@ -71,6 +78,11 @@ class Document(TimestampedModel):
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     currency = models.CharField(max_length=3, default="EUR")
     extracted_text = models.TextField(blank=True)
+    processing_status = models.CharField(
+        max_length=20, choices=ProcessingStatus.choices, default=ProcessingStatus.PENDING
+    )
+    processing_error = models.TextField(blank=True)
+    extracted_at = models.DateTimeField(null=True, blank=True)
     category = models.ForeignKey(Category, null=True, blank=True, on_delete=models.SET_NULL)
     tags = models.ManyToManyField(Tag, blank=True, related_name="documents")
     people = models.ManyToManyField(Person, through="DocumentPerson", related_name="documents")
