@@ -20,7 +20,7 @@
   </style>
 </head>
 <body>
-  <header><div><h1>Dokument prüfen</h1><p>{{ document.original_filename }} · {{ document.get_processing_status_display }}</p></div><nav><a href="{% url 'dashboard' %}">Übersicht</a> · <a href="{% url 'document_archive' %}">Archiv</a></nav></header>
+  <header><div><h1>Dokument prüfen</h1><p>{{ document.original_filename }} · {{ document.get_processing_status_display }}</p></div>{% include "ledger/_navigation.html" %}</header>
   {% for message in messages %}<div class="card">{{ message }}</div>{% endfor %}
   {% if document.processing_error %}<div class="card error">{{ document.processing_error }}</div>{% endif %}
   <div class="grid">

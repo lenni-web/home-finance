@@ -35,6 +35,14 @@ class DocumentUploadForm(forms.ModelForm):
     class Meta:
         model = Document
         fields = ["file", "kind", "title", "document_date", "category", "tags"]
+        labels = {
+            "file": "Datei",
+            "kind": "Dokumenttyp",
+            "title": "Titel (optional)",
+            "document_date": "Dokumentdatum (optional)",
+            "category": "Kategorie (optional)",
+            "tags": "Tags (optional)",
+        }
         widgets = {"document_date": forms.DateInput(attrs={"type": "date"})}
 
     def clean_file(self):

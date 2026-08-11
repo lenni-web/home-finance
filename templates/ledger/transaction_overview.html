@@ -31,7 +31,7 @@
   </style>
 </head>
 <body>
-  <header><div><h1>Buchungsübersicht</h1><p>{{ transaction_count }} Buchungen, davon {{ uncategorized_count }} ohne Kategorie</p></div><nav><a href="{% url 'dashboard' %}">Archiv</a> · <a href="{% url 'manage_classification' %}">Kategorien & Regeln</a></nav></header>
+  <header><div><h1>Buchungsübersicht</h1><p>{{ transaction_count }} Buchungen, davon {{ uncategorized_count }} ohne Kategorie</p></div>{% include "ledger/_navigation.html" %}</header>
   {% for message in messages %}<div class="card messages">{{ message }}</div>{% endfor %}
   <section class="summary">
     <div class="card metric">Einnahmen<strong class="positive">{{ totals.income|floatformat:2 }} €</strong></div>
@@ -56,4 +56,3 @@
     <div class="actions"><button class="secondary" name="action" value="inline_save">Einzelne Zuordnungen speichern</button></div>
   </form>
 </body></html>
-

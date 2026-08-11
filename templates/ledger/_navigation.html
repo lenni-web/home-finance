@@ -1,0 +1,17 @@
+<style>
+  .main-nav { display:flex; align-items:center; gap:.35rem; flex-wrap:wrap; }
+  .main-nav a, .main-nav button { box-sizing:border-box; display:inline-flex; align-items:center; min-height:38px; margin:0; padding:.5rem .72rem; border:0; border-radius:9px; background:transparent; color:#475569; font:inherit; font-size:.9rem; font-weight:650; text-decoration:none; cursor:pointer; }
+  .main-nav a:hover, .main-nav button:hover { background:#e2e8f0; color:#0f172a; }
+  .main-nav a.active { background:#ccfbf1; color:#115e59; }
+  .main-nav .logout { margin-left:.3rem; border-left:1px solid #cbd5e1; padding-left:.65rem; }
+  .main-nav form { margin:0; }
+  @media(max-width:800px) { .main-nav { margin-top:1rem; } .main-nav .logout { margin-left:0; border-left:0; } }
+</style>
+<nav class="main-nav" aria-label="Hauptnavigation">
+  <a href="{% url 'dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">Übersicht</a>
+  <a href="{% url 'transaction_overview' %}" class="{% if request.resolver_match.url_name == 'transaction_overview' %}active{% endif %}">Buchungen</a>
+  <a href="{% url 'document_archive' %}" class="{% if request.resolver_match.url_name == 'document_archive' or request.resolver_match.url_name == 'document_review' %}active{% endif %}">Dokumente</a>
+  <a href="{% url 'manage_classification' %}" class="{% if request.resolver_match.url_name == 'manage_classification' %}active{% endif %}">Kategorien & Regeln</a>
+  <a href="{% url 'settings' %}" class="{% if request.resolver_match.url_name == 'settings' %}active{% endif %}">Einstellungen</a>
+  <form class="logout" method="post" action="{% url 'logout' %}">{% csrf_token %}<button>Abmelden</button></form>
+</nav>

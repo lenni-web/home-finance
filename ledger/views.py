@@ -2,7 +2,7 @@ import mimetypes
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db.models import Q, Sum
+from django.db.models import Count, Q, Sum
 from django.db.models.functions import TruncMonth
 from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -15,7 +15,9 @@ from .forms import (
 )
 from .document_matching import document_transaction_candidates, refresh_unmatched_document_reviews
 from .importers import INGStatementParser
-from .models import CategorizationRule, Category, Document, Person, StatementImport, Tag, Transaction
+from .models import (
+    Account, CategorizationRule, Category, Document, Person, StatementImport, Tag, Transaction,
+)
 from .rules import matching_rules
 from .tasks import process_document_task, process_statement_task
 
@@ -34,15 +36,24 @@ def dashboard(request):
         "transactions": Transaction.objects.select_related("category")[:10],
         "statement_imports": StatementImport.objects.select_related("document", "account")[:10],
         "months": months,
-        "account_form": AccountForm(),
         "upload_form": DocumentUploadForm(),
+    })
+
+
+@login_required
+def settings(request):
+    return render(request, "ledger/settings.html", {
+        "accounts": Account.objects.annotate(
+            statement_count=Count("statementimport")
+        ).order_by("name"),
+        "account_form": AccountForm(),
     })
 
 
 @login_required
 def add_account(request):
     if request.method != "POST":
-        return redirect("dashboard")
+        return redirect("settings")
     form = AccountForm(request.POST)
     if form.is_valid():
         account = form.save()
@@ -50,7 +61,7 @@ def add_account(request):
     else:
         details = " ".join(error for errors in form.errors.values() for error in errors)
         messages.error(request, f"Das Konto konnte nicht angelegt werden: {details}")
-    return redirect("dashboard")
+    return redirect("settings")
 
 
 @login_required

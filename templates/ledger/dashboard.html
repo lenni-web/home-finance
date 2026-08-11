@@ -1,35 +1,55 @@
 <!doctype html>
 <html lang="de">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Ausgabenarchiv</title>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Übersicht · Ausgabenarchiv</title>
   <style>
-    :root { font-family: system-ui, sans-serif; color: #1f2937; background: #f8fafc; }
-    body { max-width: 1120px; margin: auto; padding: 2rem; }
-    header, .grid { display: flex; justify-content: space-between; gap: 1.5rem; }
-    .card { background: white; border: 1px solid #e2e8f0; border-radius: 14px; padding: 1.25rem; margin: 1rem 0; }
-    .grid > * { flex: 1; } table { width: 100%; border-collapse: collapse; }
-    th, td { text-align: left; padding: .7rem; border-bottom: 1px solid #e2e8f0; }
-    label { display: block; margin-top: .65rem; font-weight: 600; }
-    input, select { width: 100%; box-sizing: border-box; padding: .6rem; }
-    button { margin-top: 1rem; padding: .7rem 1rem; border: 0; border-radius: 8px; background: #0f766e; color: white; }
-    .tag { display: inline-block; padding: .15rem .45rem; border-radius: 999px; background: #ccfbf1; font-size: .8rem; }
-    @media (max-width: 760px) { .grid, header { display: block; } body { padding: 1rem; } }
+    :root { font-family:Inter,ui-sans-serif,system-ui,sans-serif; color:#172033; background:#f1f5f9; }
+    * { box-sizing:border-box; } body { max-width:1240px; margin:auto; padding:1.5rem; }
+    header { display:flex; justify-content:space-between; align-items:flex-start; gap:1.5rem; }
+    h1 { margin:.1rem 0 .25rem; letter-spacing:-.035em; font-size:2rem; } h2 { margin:.15rem 0 .3rem; font-size:1.15rem; }
+    p { color:#64748b; line-height:1.5; }
+    .eyebrow { color:#0f766e; font-size:.78rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+    .card { background:white; border:1px solid #dbe3ec; border-radius:16px; padding:1.2rem; box-shadow:0 5px 20px rgba(15,23,42,.04); }
+    .message { margin:1rem 0; border-left:4px solid #0f766e; }
+    .top-grid { display:grid; grid-template-columns:minmax(360px,1.25fr) minmax(260px,.75fr); gap:1rem; margin:1.25rem 0; }
+    .upload { padding:1.45rem; } .upload form p { margin:.8rem 0; }
+    label { display:block; margin-bottom:.3rem; font-size:.84rem; font-weight:700; }
+    input,select { width:100%; padding:.68rem .75rem; border:1px solid #cbd5e1; border-radius:9px; background:white; font:inherit; }
+    input[type=file] { background:#f8fafc; }
+    button.primary { padding:.75rem 1.05rem; border:0; border-radius:9px; background:#0f766e; color:white; font-weight:750; cursor:pointer; }
+    .side-stack { display:grid; gap:1rem; }
+    .quick-link { display:flex; justify-content:space-between; align-items:center; padding:.8rem 0; border-bottom:1px solid #e2e8f0; color:#172033; text-decoration:none; font-weight:650; }
+    .quick-link:last-child { border:0; } .quick-link span { color:#0f766e; }
+    .section-head { display:flex; justify-content:space-between; align-items:end; margin:1.5rem 0 .65rem; }
+    .section-head a { color:#0f766e; font-weight:700; text-decoration:none; }
+    .table-wrap { overflow:auto; } table { width:100%; border-collapse:collapse; }
+    th,td { padding:.78rem .65rem; border-bottom:1px solid #e2e8f0; text-align:left; vertical-align:middle; }
+    th { color:#64748b; font-size:.76rem; text-transform:uppercase; letter-spacing:.045em; }
+    td a { color:#0f766e; font-weight:650; text-decoration:none; }
+    .tag,.status { display:inline-block; padding:.2rem .48rem; border-radius:999px; font-size:.76rem; }
+    .tag { background:#ccfbf1; color:#115e59; } .status { background:#f1f5f9; color:#475569; }
+    .status.good { background:#dcfce7; color:#166534; } .status.warn { background:#fef3c7; color:#92400e; }
+    .muted { color:#64748b; } .empty { padding:1.4rem; text-align:center; color:#64748b; }
+    @media(max-width:850px){body{padding:1rem}header{display:block}.top-grid{grid-template-columns:1fr}.section-head{align-items:center}}
   </style>
 </head>
 <body>
-  <header><div><h1>Ausgabenarchiv</h1><p>Belege und Kontoauszüge an einem Ort.</p></div><nav><a href="{% url 'transaction_overview' %}">Buchungen</a> · <a href="{% url 'document_archive' %}">Dokumente</a> · <a href="{% url 'manage_classification' %}">Kategorien & Regeln</a> · <a href="/admin/">Admin</a> · <form method="post" action="{% url 'logout' %}" style="display:inline">{% csrf_token %}<button style="margin:0;padding:.3rem .55rem">Abmelden</button></form></nav></header>
-  {% for message in messages %}<div class="card">{{ message }}</div>{% endfor %}
-  <section class="card"><h2>Konto anlegen</h2><p>Für den ersten Kontoauszug wird zunächst ein Konto benötigt. Es genügt ein frei gewählter Name; die vollständige IBAN wird nicht gespeichert.</p><form method="post" action="{% url 'add_account' %}">{% csrf_token %}{{ account_form.as_p }}<button>Konto anlegen</button></form></section>
-  <div class="grid">
-    <section class="card"><h2>Dokument hochladen</h2><form method="post" enctype="multipart/form-data" action="{% url 'upload_document' %}">{% csrf_token %}{{ upload_form.as_p }}<button>Hochladen</button></form></section>
-    <section class="card"><h2>Archivmonate</h2>{% for item in months %}<p>{{ item.month|date:"F Y" }}</p>{% empty %}<p>Noch keine Dokumente.</p>{% endfor %}</section>
+  <header><div><div class="eyebrow">Home Finance</div><h1>Finanzen im Blick</h1><p>Dokumente erfassen, Buchungen prüfen und Ausgaben zuordnen.</p></div>{% include "ledger/_navigation.html" %}</header>
+  {% for message in messages %}<div class="card message">{{ message }}</div>{% endfor %}
+  <div class="top-grid">
+    <section class="card upload"><div class="eyebrow">Neuer Eingang</div><h2>Dokument hochladen</h2><p>Rechnung, Kassenbeleg oder PDF-Kontoauszug hinzufügen. Die Analyse läuft anschließend im Hintergrund.</p><form method="post" enctype="multipart/form-data" action="{% url 'upload_document' %}">{% csrf_token %}{{ upload_form.as_p }}<button class="primary">Hochladen und verarbeiten</button></form></section>
+    <div class="side-stack">
+      <section class="card"><div class="eyebrow">Schnellzugriff</div><a class="quick-link" href="{% url 'document_archive' %}">Dokumentenarchiv <span>→</span></a><a class="quick-link" href="{% url 'transaction_overview' %}">Buchungen bearbeiten <span>→</span></a><a class="quick-link" href="{% url 'settings' %}">Konten verwalten <span>→</span></a></section>
+      <section class="card"><div class="eyebrow">Archiv</div><h2>Erfasste Monate</h2>{% for item in months %}<span class="status">{{ item.month|date:"F Y" }}</span> {% empty %}<p>Noch keine datierten Dokumente.</p>{% endfor %}</section>
+    </div>
   </div>
-  <section class="card"><h2>Neueste Dokumente</h2><table><thead><tr><th>Datum</th><th>Dokument</th><th>Kategorie</th><th>Tags</th></tr></thead><tbody>
-    {% for document in documents %}<tr><td>{{ document.document_date|default:"–" }}</td><td><a href="{% url 'document_review' document.pk %}">{{ document }}</a></td><td>{{ document.category|default:"–" }}</td><td>{% for tag in document.tags.all %}<span class="tag">{{ tag }}</span> {% endfor %}</td></tr>{% empty %}<tr><td colspan="4">Noch keine Dokumente.</td></tr>{% endfor %}
+  <div class="section-head"><div><h2>Neueste Dokumente</h2><span class="muted">Zuletzt eingegangene Belege und Auszüge</span></div><a href="{% url 'document_archive' %}">Alle anzeigen →</a></div>
+  <section class="card table-wrap"><table><thead><tr><th>Datum</th><th>Dokument</th><th>Kategorie</th><th>Tags</th><th>Status</th></tr></thead><tbody>
+    {% for document in documents %}<tr><td>{{ document.document_date|date:"d.m.Y"|default:"–" }}</td><td><a href="{% url 'document_review' document.pk %}">{{ document }}</a><div class="muted">{{ document.get_kind_display }}</div></td><td>{{ document.category|default:"–" }}</td><td>{% for tag in document.tags.all %}<span class="tag">{{ tag }}</span> {% empty %}–{% endfor %}</td><td><span class="status">{{ document.get_processing_status_display }}</span></td></tr>{% empty %}<tr><td colspan="5" class="empty">Noch keine Dokumente vorhanden.</td></tr>{% endfor %}
   </tbody></table></section>
-  <section class="card"><h2>Kontoauszüge</h2><table><thead><tr><th>Konto</th><th>Dokument</th><th>Status</th><th>Saldo-Prüfung</th><th>Buchungen</th><th></th></tr></thead><tbody>
-    {% for statement in statement_imports %}<tr><td>{{ statement.account }}</td><td>{{ statement.document }}</td><td>{{ statement.get_status_display }}</td><td>{% if statement.reconciliation_status == "balanced" %}✓ {{ statement.get_reconciliation_status_display }}{% elif statement.reconciliation_status == "mismatch" %}⚠ {{ statement.get_reconciliation_status_display }} ({{ statement.reconciliation_difference|floatformat:2 }} €){% else %}{{ statement.get_reconciliation_status_display }}{% endif %}</td><td>{{ statement.transactions.count }}</td><td>{% if statement.status == "review" %}<a href="{% url 'statement_review' statement.pk %}">Jetzt prüfen</a>{% endif %}</td></tr>{% empty %}<tr><td colspan="6">Noch keine Kontoauszüge.</td></tr>{% endfor %}
+  <div class="section-head"><div><h2>Kontoauszüge</h2><span class="muted">Importstatus und rechnerische Saldo-Prüfung</span></div></div>
+  <section class="card table-wrap"><table><thead><tr><th>Konto</th><th>Dokument</th><th>Verarbeitung</th><th>Saldo-Prüfung</th><th>Buchungen</th><th></th></tr></thead><tbody>
+    {% for statement in statement_imports %}<tr><td><strong>{{ statement.account }}</strong></td><td>{{ statement.document }}</td><td><span class="status">{{ statement.get_status_display }}</span></td><td>{% if statement.reconciliation_status == "balanced" %}<span class="status good">✓ {{ statement.get_reconciliation_status_display }}</span>{% elif statement.reconciliation_status == "mismatch" %}<span class="status warn">⚠ {{ statement.get_reconciliation_status_display }} · {{ statement.reconciliation_difference|floatformat:2 }} €</span>{% else %}<span class="status">{{ statement.get_reconciliation_status_display }}</span>{% endif %}</td><td>{{ statement.transactions.count }}</td><td>{% if statement.status == "review" %}<a href="{% url 'statement_review' statement.pk %}">Jetzt prüfen →</a>{% endif %}</td></tr>{% empty %}<tr><td colspan="6" class="empty">Noch keine Kontoauszüge vorhanden.</td></tr>{% endfor %}
   </tbody></table></section>
 </body></html>

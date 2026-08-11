@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Einstellungen · Ausgabenarchiv</title>
+  <style>
+    :root { font-family:Inter,ui-sans-serif,system-ui,sans-serif; color:#172033; background:#f1f5f9; }
+    * { box-sizing:border-box; } body { max-width:1180px; margin:auto; padding:1.5rem; }
+    header { display:flex; justify-content:space-between; align-items:flex-start; gap:1.5rem; margin-bottom:1.5rem; }
+    h1 { margin:.1rem 0 .25rem; letter-spacing:-.03em; } h2 { margin-top:0; }
+    p { color:#64748b; line-height:1.55; }
+    .grid { display:grid; grid-template-columns:minmax(300px,.8fr) minmax(420px,1.2fr); gap:1rem; align-items:start; }
+    .card { background:white; border:1px solid #dbe3ec; border-radius:16px; padding:1.25rem; box-shadow:0 5px 20px rgba(15,23,42,.04); }
+    .message { margin-bottom:1rem; border-left:4px solid #0f766e; }
+    label { display:block; margin:.8rem 0 .3rem; font-weight:650; font-size:.88rem; }
+    input { width:100%; padding:.7rem .75rem; border:1px solid #cbd5e1; border-radius:9px; font:inherit; }
+    button.primary { margin-top:1rem; padding:.72rem 1rem; border:0; border-radius:9px; background:#0f766e; color:white; font-weight:700; cursor:pointer; }
+    table { width:100%; border-collapse:collapse; } th,td { padding:.8rem .5rem; border-bottom:1px solid #e2e8f0; text-align:left; }
+    th { color:#64748b; font-size:.78rem; text-transform:uppercase; letter-spacing:.04em; }
+    .iban { font-family:ui-monospace,monospace; color:#64748b; }
+    .empty { padding:1rem 0; color:#64748b; }
+    @media(max-width:800px){body{padding:1rem} header{display:block}.grid{grid-template-columns:1fr}.table-wrap{overflow:auto}}
+  </style>
+</head>
+<body>
+  <header><div><h1>Einstellungen</h1><p>Konten und grundlegende Stammdaten verwalten.</p></div>{% include "ledger/_navigation.html" %}</header>
+  {% for message in messages %}<div class="card message">{{ message }}</div>{% endfor %}
+  <div class="grid">
+    <section class="card">
+      <h2>Neues Konto</h2>
+      <p>Ein frei gewählter Name genügt. Aus Datenschutzgründen speichern wir höchstens die letzten vier Stellen der IBAN.</p>
+      <form method="post" action="{% url 'add_account' %}">{% csrf_token %}{{ account_form.as_p }}<button class="primary">Konto anlegen</button></form>
+    </section>
+    <section class="card table-wrap">
+      <h2>Vorhandene Konten</h2>
+      <table><thead><tr><th>Name</th><th>IBAN-Kennung</th><th>Kontoauszüge</th></tr></thead><tbody>
+        {% for account in accounts %}<tr><td><strong>{{ account.name }}</strong></td><td class="iban">{% if account.iban_last_four %}•••• {{ account.iban_last_four }}{% else %}–{% endif %}</td><td>{{ account.statement_count }}</td></tr>{% empty %}<tr><td colspan="3" class="empty">Noch kein Konto angelegt.</td></tr>{% endfor %}
+      </tbody></table>
+    </section>
+  </div>
+</body>
+</html>

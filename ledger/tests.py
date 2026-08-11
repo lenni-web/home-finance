@@ -78,13 +78,13 @@ class StatementWorkflowTests(TestCase):
         self.client.force_login(self.user)
         self.account = Account.objects.create(name="ING Girokonto")
 
-    def test_account_can_be_created_from_dashboard(self):
+    def test_account_can_be_created_from_settings(self):
         response = self.client.post(reverse("add_account"), {
             "name": "Gemeinschaftskonto",
             "iban_last_four": "1234",
         })
 
-        self.assertRedirects(response, reverse("dashboard"))
+        self.assertRedirects(response, reverse("settings"))
         self.assertTrue(Account.objects.filter(
             name="Gemeinschaftskonto", iban_last_four="1234"
         ).exists())
@@ -95,7 +95,7 @@ class StatementWorkflowTests(TestCase):
             "iban_last_four": "12AB",
         })
 
-        self.assertRedirects(response, reverse("dashboard"))
+        self.assertRedirects(response, reverse("settings"))
         self.assertFalse(Account.objects.filter(name="Fehlerhaft").exists())
 
     def test_statement_review_field_limit_supports_large_statements(self):
