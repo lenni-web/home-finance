@@ -136,3 +136,8 @@ von sieben Tagen und – sofern erkannt – des Betrags eingeschränkt.
 Unter `/documents/` steht das nach Monat sortierte Archiv mit Volltextsuche, Filtern,
 Vorschau und Download zur Verfügung. Die OCR läuft im aktuellen Prototyp synchron; bei
 größeren Dokumenten kann der Upload deshalb einige Zeit benötigen.
+
+Die Reihenfolge von Beleg und Kontoauszug ist unerheblich: Wird ein Kontoauszug erst
+später bestätigt, prüft die Anwendung alle bisher unverknüpften Belege mit erkanntem
+Datum und Betrag erneut. Mögliche Treffer werden als `Prüfung erforderlich` markiert,
+aber aus Sicherheitsgründen nicht ohne Bestätigung fest verknüpft.

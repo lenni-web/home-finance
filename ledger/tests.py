@@ -10,6 +10,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from .document_processing import _parse_date, _parse_merchant, _parse_total
+from .document_matching import refresh_unmatched_document_reviews
 from .importers import ParsedTransaction
 from .models import (
     Account, CategorizationRule, Category, Document, Person, StatementImport, Tag, Transaction,
@@ -386,3 +387,44 @@ Gesamt 12,34 EUR
         response = self.client.get(reverse("document_archive"), {"q": "Unverwechselbarer"})
 
         self.assertContains(response, "Test")
+
+    def test_receipt_uploaded_before_statement_is_rematched_later(self):
+        receipt = Document.objects.create(
+            kind=Document.Kind.RECEIPT,
+            title="Früher Beleg",
+            original_filename="early.pdf",
+            document_date=date(2026, 8, 5),
+            total_amount="12.34",
+            processing_status=Document.ProcessingStatus.PROCESSED,
+            file=SimpleUploadedFile("early.pdf", b"%PDF-early", "application/pdf"),
+        )
+        account = Account.objects.create(name="ING später")
+        statement_document = Document.objects.create(
+            kind=Document.Kind.BANK_STATEMENT,
+            original_filename="later.pdf",
+            file=SimpleUploadedFile("later.pdf", b"%PDF-later", "application/pdf"),
+        )
+        statement = StatementImport.objects.create(
+            document=statement_document,
+            account=account,
+            status=StatementImport.Status.IMPORTED,
+        )
+        transaction = Transaction.objects.create(
+            statement_import=statement,
+            booking_date=date(2026, 8, 7),
+            value_date=date(2026, 8, 7),
+            counterparty="Musterladen",
+            amount="-12.34",
+            source_fingerprint="f" * 64,
+            reviewed=True,
+        )
+
+        rematched = refresh_unmatched_document_reviews()
+
+        receipt.refresh_from_db()
+        self.assertEqual(rematched, [receipt])
+        self.assertEqual(receipt.processing_status, Document.ProcessingStatus.REVIEW)
+        self.assertFalse(receipt.transactions.exists())
+        response = self.client.get(reverse("document_review", args=[receipt.pk]))
+        self.assertContains(response, "Musterladen")
+        self.assertContains(response, str(transaction.amount))

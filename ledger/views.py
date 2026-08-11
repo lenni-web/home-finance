@@ -1,5 +1,4 @@
 import hashlib
-from datetime import timedelta
 from pathlib import Path
 
 from django.contrib import messages
@@ -15,6 +14,7 @@ from .forms import (
     TransactionFilterForm, TransactionReviewFormSet,
 )
 from .document_processing import process_document
+from .document_matching import document_transaction_candidates, refresh_unmatched_document_reviews
 from .importers import INGStatementParser
 from .models import CategorizationRule, Category, Document, Person, StatementImport, Tag, Transaction
 from .rules import apply_categorization_rules, matching_rules
@@ -139,7 +139,11 @@ def statement_review(request, pk):
                 statement.save(update_fields=["status", "updated_at"])
                 statement.document.processing_status = Document.ProcessingStatus.PROCESSED
                 statement.document.save(update_fields=["processing_status", "updated_at"])
-                messages.success(request, f"{queryset.count()} Buchungen wurden übernommen.")
+                rematched = refresh_unmatched_document_reviews()
+                message = f"{queryset.count()} Buchungen wurden übernommen."
+                if rematched:
+                    message += f" Für {len(rematched)} Beleg(e) wurden mögliche Zuordnungen gefunden."
+                messages.success(request, message)
                 return redirect("dashboard")
             messages.success(request, "Korrekturen wurden gespeichert.")
             return redirect("statement_review", pk=statement.pk)
@@ -302,29 +306,12 @@ def toggle_classification(request, kind, pk):
     return redirect("manage_classification")
 
 
-def _document_transaction_candidates(document):
-    queryset = Transaction.objects.filter(reviewed=True).select_related("statement_import__account")
-    if document.document_date:
-        queryset = queryset.filter(
-            booking_date__range=(
-                document.document_date - timedelta(days=7),
-                document.document_date + timedelta(days=7),
-            )
-        )
-    if document.total_amount is not None:
-        amount = abs(document.total_amount)
-        exact = queryset.filter(Q(amount=amount) | Q(amount=-amount))
-        if exact.exists():
-            queryset = exact
-    return queryset.order_by("-booking_date", "-id")
-
-
 def document_review(request, pk):
     document = get_object_or_404(
         Document.objects.select_related("category").prefetch_related("tags", "people", "transactions"),
         pk=pk,
     )
-    candidates = _document_transaction_candidates(document)
+    candidates = document_transaction_candidates(document)
     if request.method == "POST":
         if request.POST.get("action") == "retry":
             try:
