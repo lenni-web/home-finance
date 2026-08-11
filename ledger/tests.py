@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.conf import settings
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
@@ -56,6 +57,14 @@ class StatementWorkflowTests(TestCase):
 
         self.assertRedirects(response, reverse("dashboard"))
         self.assertFalse(Account.objects.filter(name="Fehlerhaft").exists())
+
+    def test_statement_review_field_limit_supports_large_statements(self):
+        fields_per_transaction = 8
+        expected_large_statement = 500
+        self.assertGreaterEqual(
+            settings.DATA_UPLOAD_MAX_NUMBER_FIELDS,
+            fields_per_transaction * expected_large_statement,
+        )
 
     @patch("ledger.views.INGStatementParser.parse_pdf")
     def test_statement_upload_creates_review_batch(self, parse_pdf):
