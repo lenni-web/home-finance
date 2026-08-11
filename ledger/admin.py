@@ -13,11 +13,12 @@ class DocumentAdmin(admin.ModelAdmin):
 
 @admin.register(Transaction)
 class TransactionAdmin(admin.ModelAdmin):
-    list_display = ("booking_date", "counterparty", "amount", "category", "reviewed")
+    list_display = (
+        "booking_date", "booking_type", "counterparty", "amount", "category", "reviewed"
+    )
     list_filter = ("reviewed", "category", "tags", "people")
     search_fields = ("counterparty", "description")
     date_hierarchy = "booking_date"
 
 
 admin.site.register([Account, Category, Tag, Person, StatementImport, DocumentPerson])
-

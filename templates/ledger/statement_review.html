@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kontoauszug prüfen</title>
+  <style>
+    :root { font-family: system-ui, sans-serif; color: #1f2937; background: #f8fafc; }
+    body { margin: auto; padding: 1.5rem; max-width: 1500px; }
+    header { display: flex; justify-content: space-between; align-items: start; gap: 1rem; }
+    .card { background: white; border: 1px solid #e2e8f0; border-radius: 14px; padding: 1rem; margin: 1rem 0; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 1150px; }
+    th, td { vertical-align: top; text-align: left; padding: .45rem; border-bottom: 1px solid #e2e8f0; }
+    input, select, textarea { box-sizing: border-box; width: 100%; min-width: 110px; padding: .4rem; }
+    textarea { min-width: 260px; resize: vertical; }
+    .amount input { min-width: 95px; text-align: right; }
+    .actions { position: sticky; bottom: 0; display: flex; justify-content: flex-end; gap: .75rem; padding: 1rem; background: rgba(248,250,252,.96); }
+    button { padding: .75rem 1rem; border: 0; border-radius: 8px; cursor: pointer; }
+    .save { background: #e2e8f0; color: #1f2937; }
+    .confirm { background: #0f766e; color: white; }
+    .errorlist { color: #b91c1c; margin: .25rem 0; padding-left: 1rem; }
+  </style>
+</head>
+<body>
+  <header><div><h1>Kontoauszug prüfen</h1><p>{{ statement.account }} · {{ transaction_count }} Buchungen · Status: {{ statement.get_status_display }}</p></div><a href="{% url 'dashboard' %}">Zur Übersicht</a></header>
+  {% for message in messages %}<div class="card">{{ message }}</div>{% endfor %}
+  <form method="post">{% csrf_token %}{{ formset.management_form }}{{ formset.non_form_errors }}
+    <div class="card table-wrap"><table><thead><tr><th>Seite</th><th>Buchung</th><th>Valuta</th><th>Art</th><th>Zahlungspartner</th><th>Verwendungszweck</th><th>Betrag</th><th>Kategorie</th></tr></thead><tbody>
+      {% for form in formset %}<tr>
+        <td>{{ form.instance.source_page }}{{ form.id }}</td>
+        <td>{{ form.booking_date.errors }}{{ form.booking_date }}</td>
+        <td>{{ form.value_date.errors }}{{ form.value_date }}</td>
+        <td>{{ form.booking_type.errors }}{{ form.booking_type }}</td>
+        <td>{{ form.counterparty.errors }}{{ form.counterparty }}</td>
+        <td>{{ form.description.errors }}{{ form.description }}</td>
+        <td class="amount">{{ form.amount.errors }}{{ form.amount }}</td>
+        <td>{{ form.category.errors }}{{ form.category }}</td>
+      </tr>{% endfor %}
+    </tbody></table></div>
+    {% if statement.status == "review" %}<div class="actions"><button class="save" name="action" value="save">Zwischenstand speichern</button><button class="confirm" name="action" value="confirm">Alle Buchungen bestätigen</button></div>{% endif %}
+  </form>
+</body></html>
+

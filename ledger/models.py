@@ -139,6 +139,7 @@ class Transaction(TimestampedModel):
     )
     booking_date = models.DateField(db_index=True)
     value_date = models.DateField(null=True, blank=True)
+    booking_type = models.CharField(max_length=120, blank=True)
     description = models.TextField()
     counterparty = models.CharField(max_length=255, blank=True)
     amount = models.DecimalField(max_digits=12, decimal_places=2)

@@ -79,3 +79,30 @@ python -m tools.inspect_ing_fixture sanitized/ing-layout.json \
 Der ING-Parser verwendet die Lesereihenfolge des PDFs und sichert Buchungs- und
 Valutadatum zusätzlich über die Position der linken Datumsspalte ab. Informationsseiten
 ohne diese Struktur werden ignoriert.
+
+## Echten ING-Auszug lokal validieren
+
+Das folgende Kommando gibt standardmäßig nur Anzahl, Seitenverteilung und die
+laufenden Nummern unvollständiger Buchungen aus:
+
+```bash
+python -m tools.validate_ing_pdf "/lokaler/pfad/Kontoauszug.pdf"
+```
+
+Optional kann eine private JSON-Kontrollliste erzeugt werden. Sie enthält echte
+Buchungsdaten, erhält Dateirechte `0600` und gehört ausschließlich in `sanitized/`:
+
+```bash
+python -m tools.validate_ing_pdf "/lokaler/pfad/Kontoauszug.pdf" \
+  --output sanitized/private-validation.json
+```
+
+## Kontoauszug über die Weboberfläche importieren
+
+1. Unter `/admin/` zunächst mindestens ein Konto anlegen.
+2. Auf der Startseite Dokumenttyp `Kontoauszug` und das Konto auswählen.
+3. Das ING-PDF hochladen; die Verarbeitung erfolgt lokal und synchron.
+4. Erkannte Buchungen in der Kontrolltabelle korrigieren oder zwischenspeichern.
+5. Erst `Alle Buchungen bestätigen` markiert den Auszug als importiert.
+
+Bereits hochgeladene identische Dateien werden über ihren SHA-256-Hash abgewiesen.
