@@ -129,3 +129,32 @@ class StatementWorkflowTests(TestCase):
         self.assertRedirects(response, reverse("dashboard"))
         self.assertEqual(statement.status, StatementImport.Status.IMPORTED)
         self.assertTrue(item.reviewed)
+
+    def test_review_renders_dates_in_html_date_input_format(self):
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=Path(media_root)):
+                document = Document.objects.create(
+                    kind=Document.Kind.BANK_STATEMENT,
+                    original_filename="kontoauszug.pdf",
+                    file=SimpleUploadedFile("kontoauszug.pdf", b"%PDF-date", "application/pdf"),
+                )
+        statement = StatementImport.objects.create(
+            document=document,
+            account=self.account,
+            status=StatementImport.Status.REVIEW,
+        )
+        Transaction.objects.create(
+            statement_import=statement,
+            booking_date=date(2026, 7, 9),
+            value_date=date(2026, 7, 8),
+            booking_type="Lastschrift",
+            counterparty="Beispiel GmbH",
+            description="Test",
+            amount="-10.00",
+            source_fingerprint="b" * 64,
+        )
+
+        response = self.client.get(reverse("statement_review", args=[statement.pk]))
+
+        self.assertContains(response, 'value="2026-07-09"')
+        self.assertContains(response, 'value="2026-07-08"')
