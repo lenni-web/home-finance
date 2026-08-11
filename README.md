@@ -99,7 +99,7 @@ python -m tools.validate_ing_pdf "/lokaler/pfad/Kontoauszug.pdf" \
 
 ## Kontoauszug über die Weboberfläche importieren
 
-1. Unter `/admin/` zunächst mindestens ein Konto anlegen.
+1. Auf der Startseite unter `Konto anlegen` einen frei gewählten Kontonamen erfassen.
 2. Auf der Startseite Dokumenttyp `Kontoauszug` und das Konto auswählen.
 3. Das ING-PDF hochladen; die Verarbeitung erfolgt lokal und synchron.
 4. Erkannte Buchungen in der Kontrolltabelle korrigieren oder zwischenspeichern.

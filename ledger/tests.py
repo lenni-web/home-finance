@@ -37,6 +37,26 @@ class StatementWorkflowTests(TestCase):
     def setUp(self):
         self.account = Account.objects.create(name="ING Girokonto")
 
+    def test_account_can_be_created_from_dashboard(self):
+        response = self.client.post(reverse("add_account"), {
+            "name": "Gemeinschaftskonto",
+            "iban_last_four": "1234",
+        })
+
+        self.assertRedirects(response, reverse("dashboard"))
+        self.assertTrue(Account.objects.filter(
+            name="Gemeinschaftskonto", iban_last_four="1234"
+        ).exists())
+
+    def test_account_rejects_invalid_iban_suffix(self):
+        response = self.client.post(reverse("add_account"), {
+            "name": "Fehlerhaft",
+            "iban_last_four": "12AB",
+        })
+
+        self.assertRedirects(response, reverse("dashboard"))
+        self.assertFalse(Account.objects.filter(name="Fehlerhaft").exists())
+
     @patch("ledger.views.INGStatementParser.parse_pdf")
     def test_statement_upload_creates_review_batch(self, parse_pdf):
         parse_pdf.return_value = [ParsedTransaction(

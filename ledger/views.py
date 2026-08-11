@@ -6,7 +6,7 @@ from django.db import transaction
 from django.db.models.functions import TruncMonth
 from django.shortcuts import get_object_or_404, redirect, render
 
-from .forms import DocumentUploadForm, TransactionReviewFormSet
+from .forms import AccountForm, DocumentUploadForm, TransactionReviewFormSet
 from .importers import INGStatementParser
 from .models import Document, StatementImport, Transaction
 
@@ -24,8 +24,22 @@ def dashboard(request):
         "transactions": Transaction.objects.select_related("category")[:10],
         "statement_imports": StatementImport.objects.select_related("document", "account")[:10],
         "months": months,
+        "account_form": AccountForm(),
         "upload_form": DocumentUploadForm(),
     })
+
+
+def add_account(request):
+    if request.method != "POST":
+        return redirect("dashboard")
+    form = AccountForm(request.POST)
+    if form.is_valid():
+        account = form.save()
+        messages.success(request, f"Konto „{account.name}“ wurde angelegt und kann ausgewählt werden.")
+    else:
+        details = " ".join(error for errors in form.errors.values() for error in errors)
+        messages.error(request, f"Das Konto konnte nicht angelegt werden: {details}")
+    return redirect("dashboard")
 
 
 def upload_document(request):

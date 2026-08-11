@@ -6,6 +6,22 @@ from django.forms import modelformset_factory
 from .models import Account, Document, Transaction
 
 
+class AccountForm(forms.ModelForm):
+    class Meta:
+        model = Account
+        fields = ["name", "iban_last_four"]
+        labels = {
+            "name": "Kontoname",
+            "iban_last_four": "Letzte vier Stellen der IBAN (optional)",
+        }
+
+    def clean_iban_last_four(self):
+        value = self.cleaned_data["iban_last_four"].strip()
+        if value and (len(value) != 4 or not value.isdigit()):
+            raise forms.ValidationError("Bitte genau vier Ziffern eingeben.")
+        return value
+
+
 class DocumentUploadForm(forms.ModelForm):
     account = forms.ModelChoiceField(
         queryset=Account.objects.all(),
