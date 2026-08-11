@@ -41,3 +41,28 @@ Hintergrundprozess für OCR hinzu.
 Der Kontoauszug-Importer erhält pro Bank einen versionierten Parser. Extrahierte
 Buchungen landen zunächst im Prüfstatus und werden erst nach Bestätigung übernommen.
 
+## Kontoauszug lokal anonymisieren
+
+Das Original-PDF muss für die Parserentwicklung nicht weitergegeben werden. Das
+Hilfsprogramm liest es lokal und erzeugt eine datensparsame JSON-Testdatei mit
+Seitenmaßen und Textpositionen. Freie Texte werden pseudonymisiert; Datumswerte und
+Beträge werden durch synthetische Werte ersetzt. PDF-Metadaten, Bilder und Anhänge
+werden nicht übernommen.
+
+Innerhalb des Containers:
+
+```bash
+mkdir -p sanitized
+docker compose run --rm web python tools/sanitize_statement.py \
+  /pfad/im/container/kontoauszug.pdf sanitized/ing-layout.json
+```
+
+Ohne Docker in einer Python-Umgebung mit installierten Projektabhängigkeiten:
+
+```bash
+python tools/sanitize_statement.py \
+  "/lokaler/pfad/Kontoauszug.pdf" sanitized/ing-layout.json
+```
+
+Die erzeugte JSON-Datei vor dem Weitergeben immer noch einmal manuell durchsuchen.
+Der Ordner `sanitized/` ist absichtlich von Git ausgeschlossen.

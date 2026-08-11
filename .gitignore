@@ -6,5 +6,5 @@ __pycache__/
 /data/
 /media/
 /staticfiles/
+/sanitized/
 .DS_Store
-
