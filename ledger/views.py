@@ -1,7 +1,9 @@
 import mimetypes
+import re
 from calendar import monthrange
 from datetime import date
 from decimal import Decimal
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -13,7 +15,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from .forms import (
-    AccountForm, BulkCategorizationForm, CategorizationRuleFilterForm, CategorizationRuleForm, CategoryForm,
+    AccountForm, AnalyticsFilterForm, BulkCategorizationForm, CategorizationRuleFilterForm, CategorizationRuleForm, CategoryForm,
     DocumentArchiveFilterForm, DocumentReviewForm, DocumentTransactionLinkForm,
     DocumentUploadForm, EmailImportConfigForm, PersonForm, TagForm, TransactionCategorizationFormSet,
     TransactionFilterForm, TransactionReviewFormSet,
@@ -122,6 +124,103 @@ def _open_task_counts():
             reconciliation_status=StatementImport.ReconciliationStatus.MISMATCH
         ).count(),
     }
+
+
+def _chart_items(groups, total, selected_month, account_id, filter_name):
+    palette = ["#0f766e", "#2563eb", "#7c3aed", "#db2777", "#ea580c", "#65a30d"]
+    items = []
+    position = Decimal("0")
+    gradient = []
+    for index, group in enumerate(sorted(groups, key=lambda item: item["amount"], reverse=True)):
+        amount = group["amount"]
+        if not amount or not total:
+            continue
+        percent = amount / total * 100
+        color = group.get("color") or palette[index % len(palette)]
+        if not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
+            color = palette[index % len(palette)]
+        end = position + percent
+        gradient.append(f"{color} {position:.2f}% {end:.2f}%")
+        params = {"month": selected_month}
+        if account_id:
+            params["account"] = account_id
+        if group.get("id") is None:
+            if filter_name == "category":
+                params["uncategorized"] = "on"
+        else:
+            params[filter_name] = group["id"]
+        items.append({
+            **group, "color": color, "percent": round(percent, 1),
+            "drill_url": f"?{urlencode(params)}",
+        })
+        position = end
+    return items, ", ".join(gradient) or "#e2e8f0 0% 100%"
+
+
+@login_required
+def analytics(request):
+    latest_date = Transaction.objects.filter(reviewed=True).order_by("-booking_date").values_list(
+        "booking_date", flat=True
+    ).first()
+    fallback = latest_date or date.today()
+    filters = AnalyticsFilterForm(request.GET or {"month": fallback.strftime("%Y-%m")})
+    selected_month = fallback.strftime("%Y-%m")
+    account = None
+    if filters.is_valid():
+        selected_month = filters.cleaned_data.get("month") or selected_month
+        account = filters.cleaned_data.get("account")
+    try:
+        year, month = map(int, selected_month.split("-"))
+        month_start = date(year, month, 1)
+    except (AttributeError, TypeError, ValueError):
+        month_start = date(fallback.year, fallback.month, 1)
+        selected_month = month_start.strftime("%Y-%m")
+    month_end = date(month_start.year, month_start.month, monthrange(month_start.year, month_start.month)[1])
+    queryset = Transaction.objects.filter(
+        reviewed=True, amount__lt=0, booking_date__range=(month_start, month_end)
+    ).select_related("category", "statement_import__account").prefetch_related("people")
+    if account:
+        queryset = queryset.filter(statement_import__account=account)
+    transactions = list(queryset)
+    total = sum((abs(item.amount) for item in transactions), Decimal("0"))
+
+    category_groups = {}
+    person_groups = {}
+    for item in transactions:
+        category_id = item.category_id
+        category_groups.setdefault(category_id, {
+            "id": category_id,
+            "name": item.category.name if item.category else "Ohne Kategorie",
+            "color": item.category.color if item.category else "#94a3b8",
+            "amount": Decimal("0"),
+        })["amount"] += abs(item.amount)
+        people = list(item.people.all())
+        if people:
+            share = abs(item.amount) / len(people)
+            for person in people:
+                person_groups.setdefault(person.pk, {
+                    "id": person.pk, "name": person.name, "color": person.color,
+                    "amount": Decimal("0"),
+                })["amount"] += share
+        else:
+            person_groups.setdefault(None, {
+                "id": None, "name": "Ohne Person", "color": "#94a3b8",
+                "amount": Decimal("0"),
+            })["amount"] += abs(item.amount)
+
+    account_id = account.pk if account else None
+    category_items, category_gradient = _chart_items(
+        category_groups.values(), total, selected_month, account_id, "category"
+    )
+    person_items, person_gradient = _chart_items(
+        person_groups.values(), total, selected_month, account_id, "person"
+    )
+    return render(request, "ledger/analytics.html", {
+        "filters": filters, "selected_month": selected_month, "month_date": month_start,
+        "total": total, "transaction_count": len(transactions),
+        "category_items": category_items, "category_gradient": category_gradient,
+        "person_items": person_items, "person_gradient": person_gradient,
+    })
 
 
 @login_required

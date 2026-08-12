@@ -258,6 +258,15 @@ class TransactionFilterForm(forms.Form):
     uncategorized = forms.BooleanField(required=False, label="Nur ohne Kategorie")
 
 
+class AnalyticsFilterForm(forms.Form):
+    month = forms.CharField(
+        required=False, label="Monat", widget=forms.TextInput(attrs={"type": "month"})
+    )
+    account = forms.ModelChoiceField(
+        queryset=Account.objects.all(), required=False, label="Konto", empty_label="Alle Konten"
+    )
+
+
 class TransactionCategorizationForm(forms.ModelForm):
     class Meta:
         model = Transaction

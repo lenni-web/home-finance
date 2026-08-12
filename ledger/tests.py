@@ -514,6 +514,53 @@ class CategorizationWorkflowTests(TestCase):
         self.assertContains(response, "Ohne Kategorie")
         self.assertContains(response, "Offene Aufgaben")
 
+    def test_analytics_shows_category_and_person_pie_charts_with_drill_down(self):
+        category = Category.objects.create(name="Lebensmittel", color="#22aa44")
+        person = Person.objects.create(name="Lennart", color="#663399")
+        self.item.category = category
+        self.item.save(update_fields=["category", "updated_at"])
+        self.item.people.add(person)
+        Transaction.objects.create(
+            statement_import=self.statement, booking_date=date(2026, 7, 11),
+            counterparty="Ohne Zuordnung", amount="-7.50",
+            source_fingerprint="1" * 64, reviewed=True,
+        )
+
+        response = self.client.get(reverse("analytics"), {"month": "2026-07"})
+
+        self.assertContains(response, "Ausgaben nach Kategorie")
+        self.assertContains(response, "Ausgaben nach Person")
+        self.assertContains(response, "conic-gradient")
+        self.assertContains(response, "Lebensmittel")
+        self.assertContains(response, "Lennart")
+        self.assertContains(response, "Ohne Kategorie")
+        self.assertContains(response, "Ohne Person")
+        self.assertContains(response, "50,00 €")
+        self.assertContains(response, f"category={category.pk}")
+        self.assertContains(response, f"person={person.pk}")
+
+    def test_analytics_can_be_filtered_by_account(self):
+        other_account = Account.objects.create(name="Zweites Konto")
+        other_document = Document.objects.create(
+            kind=Document.Kind.BANK_STATEMENT, original_filename="analytics-other.pdf",
+            file=SimpleUploadedFile("analytics-other.pdf", b"%PDF-analytics-other", "application/pdf"),
+        )
+        other_statement = StatementImport.objects.create(
+            document=other_document, account=other_account, status=StatementImport.Status.IMPORTED,
+        )
+        Transaction.objects.create(
+            statement_import=other_statement, booking_date=date(2026, 7, 12),
+            counterparty="Anderes Konto", amount="-100.00",
+            source_fingerprint="2" * 64, reviewed=True,
+        )
+
+        response = self.client.get(reverse("analytics"), {
+            "month": "2026-07", "account": str(self.account.pk),
+        })
+
+        self.assertContains(response, "42,50 €")
+        self.assertNotContains(response, "142,50 €")
+
     def test_open_tasks_lists_uncategorized_transactions(self):
         response = self.client.get(reverse("open_tasks"))
 

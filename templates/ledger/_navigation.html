@@ -9,6 +9,7 @@
 </style>
 <nav class="main-nav" aria-label="Hauptnavigation">
   <a href="{% url 'dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">Übersicht</a>
+  <a href="{% url 'analytics' %}" class="{% if request.resolver_match.url_name == 'analytics' %}active{% endif %}">Auswertungen</a>
   <a href="{% url 'transaction_overview' %}" class="{% if request.resolver_match.url_name == 'transaction_overview' %}active{% endif %}">Buchungen</a>
   <a href="{% url 'document_archive' %}" class="{% if request.resolver_match.url_name == 'document_archive' or request.resolver_match.url_name == 'document_review' %}active{% endif %}">Dokumente</a>
   <a href="{% url 'automatic_matches' %}" class="{% if request.resolver_match.url_name == 'automatic_matches' %}active{% endif %}">Zuordnungen</a>
