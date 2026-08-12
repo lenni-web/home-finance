@@ -582,6 +582,36 @@ class CategorizationWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 405)
         self.assertTrue(CategorizationRule.objects.filter(pk=rule.pk).exists())
 
+    def test_rules_can_be_searched_filtered_and_sorted(self):
+        category = Category.objects.create(name="Versicherungen")
+        CategorizationRule.objects.create(
+            name="Zweite Regel", match_text="Versicherer", category=category,
+            priority=20, active=True, auto_apply=True,
+        )
+        CategorizationRule.objects.create(
+            name="Erste Regel", match_text="Anderer Händler",
+            priority=10, active=False, auto_apply=False,
+        )
+
+        response = self.client.get(reverse("manage_classification"), {
+            "q": "Versicherungen",
+            "status": "active",
+            "mode": "automatic",
+            "sort": "name",
+        })
+
+        self.assertContains(response, "Zweite Regel")
+        self.assertNotContains(response, "Erste Regel")
+        self.assertContains(response, "1 von 2")
+
+        response = self.client.get(reverse("manage_classification"), {
+            "sort": "priority_asc",
+        })
+        self.assertEqual(
+            [rule.name for rule in response.context["rules"]],
+            ["Erste Regel", "Zweite Regel"],
+        )
+
     def test_category_can_be_created_and_deactivated(self):
         response = self.client.post(reverse("manage_classification"), {
             "kind": "category",

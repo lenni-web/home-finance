@@ -304,3 +304,40 @@ class CategorizationRuleForm(forms.ModelForm):
             "name", "match_text", "priority", "category", "tags", "people", "auto_apply"
         ]
         labels = {"priority": "Priorität (höher wird zuerst geprüft)"}
+
+
+class CategorizationRuleFilterForm(forms.Form):
+    q = forms.CharField(
+        required=False,
+        label="Suche",
+        widget=forms.TextInput(attrs={"placeholder": "Name, Suchtext oder Zuordnung"}),
+    )
+    status = forms.ChoiceField(
+        required=False,
+        label="Status",
+        choices=[("", "Alle"), ("active", "Aktiv"), ("inactive", "Inaktiv")],
+    )
+    mode = forms.ChoiceField(
+        required=False,
+        label="Modus",
+        choices=[("", "Alle"), ("automatic", "Automatisch"), ("suggestion", "Vorschlag")],
+    )
+    category = forms.ModelChoiceField(
+        queryset=Category.objects.all(),
+        required=False,
+        label="Kategorie",
+        empty_label="Alle Kategorien",
+    )
+    sort = forms.ChoiceField(
+        required=False,
+        label="Sortierung",
+        initial="priority_desc",
+        choices=[
+            ("priority_desc", "Priorität: hoch zuerst"),
+            ("priority_asc", "Priorität: niedrig zuerst"),
+            ("name", "Name: A–Z"),
+            ("match_text", "Suchtext: A–Z"),
+            ("applications", "Treffer: viele zuerst"),
+            ("updated", "Zuletzt geändert"),
+        ],
+    )

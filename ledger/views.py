@@ -13,7 +13,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from .forms import (
-    AccountForm, BulkCategorizationForm, CategorizationRuleForm, CategoryForm,
+    AccountForm, BulkCategorizationForm, CategorizationRuleFilterForm, CategorizationRuleForm, CategoryForm,
     DocumentArchiveFilterForm, DocumentReviewForm, DocumentTransactionLinkForm,
     DocumentUploadForm, EmailImportConfigForm, PersonForm, TagForm, TransactionCategorizationFormSet,
     TransactionFilterForm, TransactionReviewFormSet,
@@ -415,14 +415,51 @@ def manage_classification(request):
                 created = form.save()
                 messages.success(request, f"„{created}“ wurde angelegt.")
                 return redirect("manage_classification")
+    rules = CategorizationRule.objects.select_related("category").prefetch_related(
+        "tags", "people"
+    )
+    rule_count = rules.count()
+    rule_filters = CategorizationRuleFilterForm(request.GET)
+    if rule_filters.is_valid():
+        values = rule_filters.cleaned_data
+        if values.get("q"):
+            query = values["q"]
+            rules = rules.filter(
+                Q(name__icontains=query)
+                | Q(match_text__icontains=query)
+                | Q(category__name__icontains=query)
+                | Q(tags__name__icontains=query)
+                | Q(people__name__icontains=query)
+            )
+        if values.get("status") == "active":
+            rules = rules.filter(active=True)
+        elif values.get("status") == "inactive":
+            rules = rules.filter(active=False)
+        if values.get("mode") == "automatic":
+            rules = rules.filter(auto_apply=True)
+        elif values.get("mode") == "suggestion":
+            rules = rules.filter(auto_apply=False)
+        if values.get("category"):
+            rules = rules.filter(category=values["category"])
+        ordering = {
+            "priority_desc": ("-priority", "name"),
+            "priority_asc": ("priority", "name"),
+            "name": ("name",),
+            "match_text": ("match_text",),
+            "applications": ("-times_applied", "name"),
+            "updated": ("-updated_at",),
+        }.get(values.get("sort"), ("-priority", "name"))
+        rules = rules.order_by(*ordering)
+    rules = rules.distinct()
     return render(request, "ledger/manage_classification.html", {
         "forms": forms,
         "categories": Category.objects.order_by("name"),
         "tags": Tag.objects.order_by("name"),
         "people": Person.objects.order_by("name"),
-        "rules": CategorizationRule.objects.select_related("category").prefetch_related(
-            "tags", "people"
-        ),
+        "rules": rules,
+        "rule_count": rule_count,
+        "filtered_rule_count": rules.count(),
+        "rule_filters": rule_filters,
         "rule_plan": locals().get("rule_plan"),
         "rule_scope": request.POST.get("scope", "uncategorized"),
     })
