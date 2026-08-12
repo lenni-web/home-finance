@@ -12,7 +12,9 @@ from django.test import TestCase, override_settings
 from django.template import Context, Template
 from django.urls import reverse
 
-from .document_processing import _parse_date, _parse_invoice_number, _parse_merchant, _parse_total
+from .document_processing import (
+    _ocr_receipt_quality, _parse_date, _parse_invoice_number, _parse_merchant, _parse_total,
+)
 from .document_matching import auto_match_document, refresh_unmatched_document_reviews
 from .importers import ParsedStatement, ParsedTransaction
 from .models import (
@@ -66,6 +68,20 @@ class DocumentModelTests(TestCase):
             _parse_invoice_number("Rechnungsnummer: RE-2026/4711\nGesamt 12,50 EUR"),
             "RE-2026/4711",
         )
+
+    def test_receipt_merchant_is_found_even_below_noisy_first_lines(self):
+        text = "a > Aa DT\nLar!-Benz-StraRe 4\nLEERGUTRÜCKNAHME\nALDI SE & Co. KG"
+
+        self.assertEqual(_parse_merchant(text), "ALDI")
+
+    def test_receipt_ocr_quality_prefers_structured_result(self):
+        noisy = "a > Aa DT\nYona ee\nDSC DS) <5"
+        structured = (
+            "ALDI\nZU ZAHLEN 40,08 €\nKARTENZAHLUNG 40,08 €\n"
+            "Datum 11.08.26 15:16 Uhr\nMWST 19,00%"
+        )
+
+        self.assertGreater(_ocr_receipt_quality(structured), _ocr_receipt_quality(noisy))
 
 
 class AccessControlTests(TestCase):

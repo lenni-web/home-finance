@@ -7,6 +7,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from django.utils import timezone
+from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 from pypdf import PdfReader
 
 from .models import Document
@@ -22,6 +23,21 @@ INVOICE_NUMBER_RE = re.compile(
 MERCHANT_EXCLUDES = (
     "rechnung", "kassenbon", "quittung", "datum", "seite", "kunden", "beleg", "steuer",
     "ust-id", "iban", "betrag",
+)
+RECEIPT_MERCHANTS = {
+    "aldi": "ALDI",
+    "lidl": "Lidl",
+    "rewe": "REWE",
+    "edeka": "EDEKA",
+    "penny": "PENNY",
+    "netto": "Netto Marken-Discount",
+    "kaufland": "Kaufland",
+    "dm drogerie": "dm-drogerie markt",
+    "rossmann": "ROSSMANN",
+}
+OCR_RECEIPT_HINTS = (
+    "zu zahlen", "kartenzahlung", "kundenbeleg", "mwst", "eur", "datum",
+    "gesamt", "summe", "terminal", "ust", "beleg",
 )
 
 
@@ -56,14 +72,83 @@ def extract_document_text(path: Path) -> str:
             )
             return sidecar.read_text(encoding="utf-8", errors="replace").strip()
     if suffix in {".jpg", ".jpeg", ".png"}:
-        result = subprocess.run(
-            ["tesseract", str(path), "stdout", "-l", "deu+eng"],
-            check=True,
-            capture_output=True,
-            timeout=180,
-        )
-        return result.stdout.decode("utf-8", errors="replace").strip()
+        with tempfile.TemporaryDirectory(prefix="home-finance-image-ocr-") as temp_dir:
+            variants = _prepare_receipt_image_variants(path, Path(temp_dir))
+            results = []
+            for variant, page_segmentation_mode in variants:
+                result = subprocess.run(
+                    [
+                        "tesseract", str(variant), "stdout", "-l", "deu+eng",
+                        "--psm", str(page_segmentation_mode), "--dpi", "300",
+                        "-c", "preserve_interword_spaces=1",
+                    ],
+                    check=True,
+                    capture_output=True,
+                    timeout=180,
+                )
+                text = result.stdout.decode("utf-8", errors="replace").strip()
+                results.append((_ocr_receipt_quality(text), text))
+            return max(results, key=lambda item: item[0])[1] if results else ""
     raise ValueError("Nicht unterstütztes Dokumentformat.")
+
+
+def _otsu_threshold(image):
+    histogram = image.histogram()
+    total = sum(histogram)
+    weighted_sum = sum(index * count for index, count in enumerate(histogram))
+    background_weight = 0
+    background_sum = 0
+    best_variance = -1
+    threshold = 180
+    for index, count in enumerate(histogram):
+        background_weight += count
+        if not background_weight:
+            continue
+        foreground_weight = total - background_weight
+        if not foreground_weight:
+            break
+        background_sum += index * count
+        background_mean = background_sum / background_weight
+        foreground_mean = (weighted_sum - background_sum) / foreground_weight
+        variance = background_weight * foreground_weight * (background_mean - foreground_mean) ** 2
+        if variance > best_variance:
+            best_variance = variance
+            threshold = index
+    return threshold
+
+
+def _prepare_receipt_image_variants(path, target_dir):
+    with Image.open(path) as source:
+        image = ImageOps.exif_transpose(source).convert("L")
+        max_dimension = 3600
+        scale = min(2.0, max_dimension / max(image.size))
+        if scale != 1:
+            image = image.resize(
+                (round(image.width * scale), round(image.height * scale)),
+                Image.Resampling.LANCZOS,
+            )
+        image = ImageOps.autocontrast(image, cutoff=(1, 1))
+        image = ImageEnhance.Contrast(image).enhance(1.35)
+        sharpened = image.filter(ImageFilter.UnsharpMask(radius=2, percent=180, threshold=3))
+        threshold = _otsu_threshold(sharpened)
+        binary = sharpened.point(lambda value: 255 if value > threshold else 0)
+        grayscale_path = target_dir / "receipt-grayscale.png"
+        binary_path = target_dir / "receipt-binary.png"
+        sharpened.save(grayscale_path, dpi=(300, 300))
+        binary.save(binary_path, dpi=(300, 300))
+    return [(grayscale_path, 4), (binary_path, 6)]
+
+
+def _ocr_receipt_quality(text):
+    lowered = text.casefold()
+    hint_score = sum(20 for hint in OCR_RECEIPT_HINTS if hint in lowered)
+    amount_score = min(len(AMOUNT_RE.findall(text)), 30) * 2
+    date_score = 20 if DATE_RE.search(text) else 0
+    readable_lines = sum(
+        1 for line in text.splitlines()
+        if len(line.strip()) >= 4 and sum(character.isalnum() for character in line) >= 3
+    )
+    return hint_score + amount_score + date_score + min(readable_lines, 60)
 
 
 def _parse_date(text: str) -> date | None:
@@ -102,6 +187,10 @@ def _parse_total(text: str) -> Decimal | None:
 
 
 def _parse_merchant(text: str) -> str:
+    normalized_text = " ".join(text.casefold().split())
+    for needle, merchant in RECEIPT_MERCHANTS.items():
+        if needle in normalized_text:
+            return merchant
     for line in text.splitlines()[:15]:
         candidate = " ".join(line.split()).strip(" -|:")
         lowered = candidate.casefold()
