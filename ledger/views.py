@@ -554,7 +554,14 @@ def document_review(request, pk):
             document = review_form.save()
             document.transactions.set(link_form.cleaned_data["transactions"])
             document.processing_status = Document.ProcessingStatus.PROCESSED
-            document.save(update_fields=["processing_status", "updated_at"])
+            document.auto_matched_transaction = None
+            document.auto_match_confidence = None
+            document.auto_match_reasons = []
+            document.auto_matched_at = None
+            document.save(update_fields=[
+                "processing_status", "auto_matched_transaction", "auto_match_confidence",
+                "auto_match_reasons", "auto_matched_at", "updated_at",
+            ])
             messages.success(request, "Dokument und Zuordnung wurden gespeichert.")
             return redirect("document_archive")
     else:
@@ -570,6 +577,39 @@ def document_review(request, pk):
         "link_form": link_form,
         "extraction_confidence": document.extraction_confidence,
     })
+
+
+@login_required
+def automatic_matches(request):
+    matches = Document.objects.filter(
+        auto_matched_transaction__isnull=False
+    ).select_related(
+        "auto_matched_transaction__statement_import__account"
+    ).order_by("-auto_matched_at", "-id")
+    return render(request, "ledger/automatic_matches.html", {"matches": matches})
+
+
+@login_required
+@require_POST
+def revoke_automatic_match(request, pk):
+    document = get_object_or_404(
+        Document.objects.select_related("auto_matched_transaction"),
+        pk=pk,
+        auto_matched_transaction__isnull=False,
+    )
+    transaction = document.auto_matched_transaction
+    document.transactions.remove(transaction)
+    document.auto_matched_transaction = None
+    document.auto_match_confidence = None
+    document.auto_match_reasons = []
+    document.auto_matched_at = None
+    document.processing_status = Document.ProcessingStatus.REVIEW
+    document.save(update_fields=[
+        "auto_matched_transaction", "auto_match_confidence", "auto_match_reasons",
+        "auto_matched_at", "processing_status", "updated_at",
+    ])
+    messages.success(request, f"Automatische Zuordnung für „{document}“ wurde widerrufen.")
+    return redirect("automatic_matches")
 
 
 @login_required

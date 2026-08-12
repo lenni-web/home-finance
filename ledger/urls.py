@@ -12,6 +12,12 @@ urlpatterns = [
     path("documents/", views.document_archive, name="document_archive"),
     path("documents/<int:pk>/review/", views.document_review, name="document_review"),
     path("documents/<int:pk>/file/", views.document_download, name="document_download"),
+    path("matches/automatic/", views.automatic_matches, name="automatic_matches"),
+    path(
+        "matches/automatic/<int:pk>/revoke/",
+        views.revoke_automatic_match,
+        name="revoke_automatic_match",
+    ),
     path("statements/<int:pk>/review/", views.statement_review, name="statement_review"),
     path("transactions/", views.transaction_overview, name="transaction_overview"),
     path("tasks/", views.open_tasks, name="open_tasks"),

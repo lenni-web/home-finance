@@ -88,6 +88,13 @@ class Document(TimestampedModel):
     category = models.ForeignKey(Category, null=True, blank=True, on_delete=models.SET_NULL)
     tags = models.ManyToManyField(Tag, blank=True, related_name="documents")
     people = models.ManyToManyField(Person, through="DocumentPerson", related_name="documents")
+    auto_matched_transaction = models.ForeignKey(
+        "Transaction", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="automatically_matched_documents",
+    )
+    auto_match_confidence = models.PositiveSmallIntegerField(null=True, blank=True)
+    auto_match_reasons = models.JSONField(default=list, blank=True)
+    auto_matched_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-document_date", "-created_at"]

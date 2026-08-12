@@ -4,6 +4,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.db.models import Q
+from django.utils import timezone
 
 from .models import Document, Transaction
 
@@ -83,7 +84,14 @@ def auto_match_document(document):
         return None
     document.transactions.add(candidates[0].transaction)
     document.processing_status = Document.ProcessingStatus.PROCESSED
-    document.save(update_fields=["processing_status", "updated_at"])
+    document.auto_matched_transaction = candidates[0].transaction
+    document.auto_match_confidence = candidates[0].confidence
+    document.auto_match_reasons = list(candidates[0].reasons)
+    document.auto_matched_at = timezone.now()
+    document.save(update_fields=[
+        "processing_status", "auto_matched_transaction", "auto_match_confidence",
+        "auto_match_reasons", "auto_matched_at", "updated_at",
+    ])
     return candidates[0]
 
 

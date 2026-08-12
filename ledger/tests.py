@@ -783,6 +783,58 @@ Gesamt 12,34 EUR
         self.assertEqual(match.confidence, 90)
         self.assertEqual(receipt.transactions.get(), transaction)
         self.assertEqual(receipt.processing_status, Document.ProcessingStatus.PROCESSED)
+        self.assertEqual(receipt.auto_matched_transaction, transaction)
+        self.assertEqual(receipt.auto_match_confidence, 90)
+        self.assertIn("gleicher Betrag", receipt.auto_match_reasons)
+        self.assertIsNotNone(receipt.auto_matched_at)
+
+        response = self.client.get(reverse("automatic_matches"))
+        self.assertContains(response, "Musterladen Berlin")
+        self.assertContains(response, "90 %")
+        self.assertContains(response, "gleicher Betrag")
+
+    def test_automatic_match_can_be_revoked_without_deleting_data(self):
+        account = Account.objects.create(name="Widerruf")
+        statement_document = Document.objects.create(
+            kind=Document.Kind.BANK_STATEMENT, original_filename="revoke-statement.pdf",
+            file=SimpleUploadedFile("revoke-statement.pdf", b"%PDF-revoke-statement", "application/pdf"),
+        )
+        statement = StatementImport.objects.create(
+            document=statement_document, account=account, status=StatementImport.Status.IMPORTED,
+        )
+        transaction = Transaction.objects.create(
+            statement_import=statement, booking_date=date(2026, 8, 6),
+            counterparty="Widerrufladen", amount="-15.00",
+            source_fingerprint="9" * 64, reviewed=True,
+        )
+        receipt = Document.objects.create(
+            kind=Document.Kind.RECEIPT, original_filename="revoke-receipt.pdf",
+            file=SimpleUploadedFile("revoke-receipt.pdf", b"%PDF-revoke-receipt", "application/pdf"),
+            document_date=date(2026, 8, 6), merchant="Widerrufladen", total_amount="15.00",
+        )
+        auto_match_document(receipt)
+
+        response = self.client.post(reverse("revoke_automatic_match", args=[receipt.pk]))
+
+        self.assertRedirects(response, reverse("automatic_matches"))
+        receipt.refresh_from_db()
+        self.assertTrue(Document.objects.filter(pk=receipt.pk).exists())
+        self.assertTrue(Transaction.objects.filter(pk=transaction.pk).exists())
+        self.assertFalse(receipt.transactions.exists())
+        self.assertIsNone(receipt.auto_matched_transaction)
+        self.assertIsNone(receipt.auto_match_confidence)
+        self.assertEqual(receipt.auto_match_reasons, [])
+        self.assertEqual(receipt.processing_status, Document.ProcessingStatus.REVIEW)
+
+    def test_automatic_match_cannot_be_revoked_via_get(self):
+        receipt = Document.objects.create(
+            kind=Document.Kind.RECEIPT, original_filename="protected-revoke.pdf",
+            file=SimpleUploadedFile("protected-revoke.pdf", b"%PDF-protected-revoke", "application/pdf"),
+        )
+
+        response = self.client.get(reverse("revoke_automatic_match", args=[receipt.pk]))
+
+        self.assertEqual(response.status_code, 405)
 
     def test_ambiguous_document_matches_are_not_linked_automatically(self):
         account = Account.objects.create(name="Mehrdeutig")
