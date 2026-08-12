@@ -14,12 +14,16 @@
     .card { background:white; border:1px solid #dbe3ec; border-radius:16px; padding:1.25rem; box-shadow:0 5px 20px rgba(15,23,42,.04); }
     .message { margin-bottom:1rem; border-left:4px solid #0f766e; }
     label { display:block; margin:.8rem 0 .3rem; font-weight:650; font-size:.88rem; }
-    input { width:100%; padding:.7rem .75rem; border:1px solid #cbd5e1; border-radius:9px; font:inherit; }
+    input,select,textarea { width:100%; padding:.7rem .75rem; border:1px solid #cbd5e1; border-radius:9px; font:inherit; }
+    input[type=checkbox] { width:auto; margin-right:.35rem; }
     button.primary { margin-top:1rem; padding:.72rem 1rem; border:0; border-radius:9px; background:#0f766e; color:white; font-weight:700; cursor:pointer; }
     table { width:100%; border-collapse:collapse; } th,td { padding:.8rem .5rem; border-bottom:1px solid #e2e8f0; text-align:left; }
     th { color:#64748b; font-size:.78rem; text-transform:uppercase; letter-spacing:.04em; }
     .iban { font-family:ui-monospace,monospace; color:#64748b; }
     .empty { padding:1rem 0; color:#64748b; }
+    .email-card { margin-top:1rem; } .email-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 1rem; }
+    .actions { display:flex; flex-wrap:wrap; gap:.5rem; } button.secondary { margin-top:1rem; padding:.72rem 1rem; border:1px solid #cbd5e1; border-radius:9px; background:#f8fafc; color:#334155; font-weight:700; cursor:pointer; }
+    .status { display:inline-block; padding:.25rem .55rem; border-radius:999px; background:#e2e8f0; font-size:.8rem; } .status.on { background:#dcfce7;color:#166534; }.error{color:#b91c1c;white-space:pre-wrap}.helptext{display:block;color:#64748b;font-size:.8rem;margin-top:.2rem}.errorlist{color:#b91c1c}
     @media(max-width:800px){body{padding:1rem} header{display:block}.grid{grid-template-columns:1fr}.table-wrap{overflow:auto}}
   </style>
 </head>
@@ -39,5 +43,13 @@
       </tbody></table>
     </section>
   </div>
+  <section class="card email-card">
+    <h2>E-Mail-Import über IMAP</h2>
+    <p>PDF-, JPEG- und PNG-Anhänge werden übernommen und anschließend wie manuell hochgeladene Dokumente verarbeitet. Das Passwort wird verschlüsselt gespeichert und nie wieder angezeigt.</p>
+    <p><span class="status {% if email_config.enabled %}on{% endif %}">{% if email_config.enabled %}Automatischer Abruf aktiv{% else %}Automatischer Abruf aus{% endif %}</span>{% if email_config.last_success_at %} · Letzter erfolgreicher Abruf: {{ email_config.last_success_at|date:"d.m.Y H:i" }}{% endif %}</p>
+    {% if email_config.last_error %}<p class="error"><strong>Letzter Fehler:</strong> {{ email_config.last_error }}</p>{% endif %}
+    <form method="post" action="{% url 'save_email_settings' %}">{% csrf_token %}<div class="email-grid">{{ email_form.as_p }}</div><div class="actions"><button class="primary" name="action" value="save">Einstellungen speichern</button><button class="secondary" name="action" value="test">Speichern und Verbindung testen</button><button class="secondary" name="action" value="fetch">Speichern und jetzt abrufen</button></div></form>
+  </section>
+  <section class="card email-card table-wrap"><h2>Letzte E-Mail-Abrufe</h2><table><thead><tr><th>Zeit</th><th>Absender</th><th>Betreff</th><th>Anhänge</th><th>Ergebnis</th></tr></thead><tbody>{% for item in email_imports %}<tr><td>{{ item.created_at|date:"d.m.Y H:i" }}</td><td>{{ item.sender|default:"–" }}</td><td>{{ item.subject|default:"–" }}</td><td>{{ item.attachment_count }}</td><td>{% if item.error_message %}<span class="error">{{ item.error_message }}</span>{% else %}Übernommen{% endif %}</td></tr>{% empty %}<tr><td colspan="5" class="empty">Noch keine E-Mails verarbeitet.</td></tr>{% endfor %}</tbody></table></section>
 </body>
 </html>

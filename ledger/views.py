@@ -14,16 +14,17 @@ from django.shortcuts import get_object_or_404, redirect, render
 from .forms import (
     AccountForm, BulkCategorizationForm, CategorizationRuleForm, CategoryForm,
     DocumentArchiveFilterForm, DocumentReviewForm, DocumentTransactionLinkForm,
-    DocumentUploadForm, PersonForm, TagForm, TransactionCategorizationFormSet,
+    DocumentUploadForm, EmailImportConfigForm, PersonForm, TagForm, TransactionCategorizationFormSet,
     TransactionFilterForm, TransactionReviewFormSet,
 )
 from .document_matching import document_transaction_candidates, refresh_unmatched_document_reviews
 from .importers import INGStatementParser
 from .models import (
-    Account, CategorizationRule, Category, Document, Person, StatementImport, Tag, Transaction,
+    Account, CategorizationRule, Category, Document, EmailImportConfig, EmailImportMessage,
+    Person, StatementImport, Tag, Transaction,
 )
 from .rules import categorization_suggestion
-from .tasks import process_document_task, process_statement_task
+from .tasks import poll_email_import_task, process_document_task, process_statement_task
 
 
 @login_required
@@ -138,12 +139,46 @@ def open_tasks(request):
 
 @login_required
 def settings(request):
+    email_config, _ = EmailImportConfig.objects.get_or_create(pk=1)
     return render(request, "ledger/settings.html", {
         "accounts": Account.objects.annotate(
             statement_count=Count("statementimport")
         ).order_by("name"),
         "account_form": AccountForm(),
+        "email_form": EmailImportConfigForm(instance=email_config, prefix="email"),
+        "email_config": email_config,
+        "email_imports": EmailImportMessage.objects.filter(config=email_config)[:10],
     })
+
+
+@login_required
+def save_email_settings(request):
+    if request.method != "POST":
+        return redirect("settings")
+    config, _ = EmailImportConfig.objects.get_or_create(pk=1)
+    form = EmailImportConfigForm(request.POST, instance=config, prefix="email")
+    if not form.is_valid():
+        accounts = Account.objects.annotate(statement_count=Count("statementimport")).order_by("name")
+        return render(request, "ledger/settings.html", {
+            "accounts": accounts, "account_form": AccountForm(),
+            "email_form": form, "email_config": config,
+            "email_imports": EmailImportMessage.objects.filter(config=config)[:10],
+        })
+    config = form.save()
+    action = request.POST.get("action")
+    if action == "test":
+        from .email_import import test_imap_connection
+        try:
+            test_imap_connection(config)
+            messages.success(request, "IMAP-Verbindung und Ordner wurden erfolgreich geprüft.")
+        except Exception as exc:
+            messages.error(request, f"IMAP-Verbindung fehlgeschlagen: {exc}")
+    elif action == "fetch":
+        poll_email_import_task.delay(config.pk, force=True)
+        messages.success(request, "Der manuelle E-Mail-Abruf wurde gestartet.")
+    else:
+        messages.success(request, "E-Mail-Importeinstellungen wurden gespeichert.")
+    return redirect("settings")
 
 
 @login_required

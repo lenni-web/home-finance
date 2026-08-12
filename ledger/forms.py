@@ -1,10 +1,12 @@
 import hashlib
 
 from django import forms
+from django.core.validators import validate_email
+from django.core.exceptions import ValidationError
 from django.forms import modelformset_factory
 
 from .models import (
-    Account, CategorizationRule, Category, Document, Person, Tag, Transaction,
+    Account, CategorizationRule, Category, Document, EmailImportConfig, Person, Tag, Transaction,
 )
 
 
@@ -22,6 +24,73 @@ class AccountForm(forms.ModelForm):
         if value and (len(value) != 4 or not value.isdigit()):
             raise forms.ValidationError("Bitte genau vier Ziffern eingeben.")
         return value
+
+
+class EmailImportConfigForm(forms.ModelForm):
+    password = forms.CharField(
+        required=False,
+        label="Passwort oder App-Passwort",
+        widget=forms.PasswordInput(render_value=False),
+        help_text="Leer lassen, um das bereits gespeicherte Passwort beizubehalten.",
+    )
+
+    class Meta:
+        model = EmailImportConfig
+        fields = [
+            "enabled", "host", "port", "security", "username", "folder",
+            "allowed_senders", "poll_interval_minutes", "mark_as_read",
+        ]
+        labels = {
+            "enabled": "Automatischen Abruf aktivieren",
+            "host": "IMAP-Server",
+            "port": "Port",
+            "security": "Verschlüsselung",
+            "username": "Benutzername",
+            "folder": "IMAP-Ordner",
+            "allowed_senders": "Erlaubte Absender",
+            "poll_interval_minutes": "Abrufintervall in Minuten",
+            "mark_as_read": "Verarbeitete E-Mails als gelesen markieren",
+        }
+        widgets = {"allowed_senders": forms.Textarea(attrs={"rows": 4})}
+
+    def clean_allowed_senders(self):
+        value = self.cleaned_data["allowed_senders"]
+        addresses = [
+            item.strip() for item in value.replace(",", "\n").splitlines() if item.strip()
+        ]
+        for address in addresses:
+            try:
+                validate_email(address)
+            except ValidationError as exc:
+                raise forms.ValidationError(f"Ungültige E-Mail-Adresse: {address}") from exc
+        return "\n".join(addresses)
+
+    def clean_port(self):
+        port = self.cleaned_data["port"]
+        if not 1 <= port <= 65535:
+            raise forms.ValidationError("Bitte einen Port zwischen 1 und 65535 wählen.")
+        return port
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("enabled"):
+            for field in ("host", "username", "folder"):
+                if not cleaned.get(field):
+                    self.add_error(field, "Dieses Feld wird für den automatischen Abruf benötigt.")
+            if not cleaned.get("password") and not self.instance.encrypted_password:
+                self.add_error("password", "Bitte ein IMAP-Passwort eingeben.")
+        interval = cleaned.get("poll_interval_minutes")
+        if interval is not None and not 1 <= interval <= 1440:
+            self.add_error("poll_interval_minutes", "Bitte 1 bis 1440 Minuten wählen.")
+        return cleaned
+
+    def save(self, commit=True):
+        config = super().save(commit=False)
+        if self.cleaned_data.get("password"):
+            config.set_password(self.cleaned_data["password"])
+        if commit:
+            config.save()
+        return config
 
 
 class DocumentUploadForm(forms.ModelForm):

@@ -27,6 +27,19 @@ services:
       redis:
         condition: service_started
 
+  beat:
+    build: .
+    command: celery -A config beat --loglevel=INFO --schedule=/app/celerybeat/celerybeat-schedule
+    env_file: .env
+    volumes:
+      - .:/app
+      - beat-schedule:/app/celerybeat
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
   db:
     image: postgres:17-alpine
     env_file: .env
@@ -53,3 +66,4 @@ volumes:
   database:
   documents:
   queue:
+  beat-schedule:

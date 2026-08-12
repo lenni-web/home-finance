@@ -21,6 +21,11 @@ services:
       - documents:/app/media
     restart: unless-stopped
 
+  beat:
+    volumes:
+      - beat-schedule:/app/celerybeat
+    restart: unless-stopped
+
   db:
     restart: unless-stopped
 

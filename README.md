@@ -48,6 +48,28 @@ auf `0`; bei einer späteren HTTPS-Einrichtung muss es auf `1` gesetzt werden.
 
 Der Worker verarbeitet OCR und Kontoauszüge unabhängig vom Webprozess. Redis dient nur
 als lokale Aufgabenwarteschlange; PostgreSQL und Dokumente liegen in eigenen Volumes.
+Ein zusätzlicher Celery-Beat-Dienst stößt den fälligen E-Mail-Abruf einmal pro Minute an;
+das in den Einstellungen gewählte Intervall entscheidet, ob tatsächlich abgerufen wird.
+
+## E-Mail-Import über IMAP
+
+Unter **Einstellungen → E-Mail-Import über IMAP** lassen sich Server, Port,
+SSL/TLS beziehungsweise STARTTLS, Benutzername, Passwort, Ordner und Abrufintervall
+hinterlegen. Unterstützt werden PDF-, JPEG- und PNG-Anhänge bis 30 MB. PDFs werden als
+Rechnungen, Bilder als Kassenbelege angelegt und anschließend vom vorhandenen
+Hintergrunddienst analysiert.
+
+Empfohlen ist ein eigenes Postfach mit einem nur dafür vorgesehenen App-Passwort. Eine
+Absenderliste kann den Import auf bekannte Adressen beschränken. Ist sie leer, werden
+Anhänge aller Absender akzeptiert. Verarbeitete IMAP-UIDs und Datei-Prüfsummen verhindern
+Doppelimporte. Verbindungstest und manueller Abruf stehen direkt in den Einstellungen
+zur Verfügung.
+
+Das IMAP-Passwort liegt mit Fernet verschlüsselt in PostgreSQL. Der Schlüssel wird aus
+`EMAIL_CREDENTIAL_KEY` abgeleitet. Dieser Wert muss vor dem ersten Speichern gesetzt,
+geheim gehalten und zusammen mit der `.env` gesichert werden. Wird er später geändert,
+kann das gespeicherte Passwort nicht mehr entschlüsselt werden und muss neu eingegeben
+werden.
 
 ## Backup und Wiederherstellung
 

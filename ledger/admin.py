@@ -1,8 +1,8 @@
 from django.contrib import admin
 
 from .models import (
-    Account, CategorizationRule, Category, Document, DocumentPerson, Person,
-    StatementImport, Tag, Transaction,
+    Account, CategorizationRule, Category, Document, DocumentPerson, EmailImportConfig,
+    EmailImportMessage, Person, StatementImport, Tag, Transaction,
 )
 
 
@@ -26,4 +26,5 @@ class TransactionAdmin(admin.ModelAdmin):
 
 admin.site.register([
     Account, Category, Tag, Person, StatementImport, DocumentPerson, CategorizationRule,
+    EmailImportConfig, EmailImportMessage,
 ])

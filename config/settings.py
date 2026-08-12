@@ -86,3 +86,10 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_ALWAYS_EAGER = os.environ.get("CELERY_TASK_ALWAYS_EAGER", "0") == "1"
 CELERY_TASK_EAGER_PROPAGATES = True
+CELERY_BEAT_SCHEDULE = {
+    "poll-email-import": {
+        "task": "ledger.poll_email_import",
+        "schedule": 60.0,
+    },
+}
+EMAIL_CREDENTIAL_KEY = os.environ.get("EMAIL_CREDENTIAL_KEY", SECRET_KEY)

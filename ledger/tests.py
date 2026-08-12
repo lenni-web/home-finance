@@ -1,6 +1,7 @@
 import tempfile
 from datetime import date
 from decimal import Decimal
+from email.message import EmailMessage
 from pathlib import Path
 from unittest.mock import patch
 
@@ -14,7 +15,8 @@ from .document_processing import _parse_date, _parse_merchant, _parse_total
 from .document_matching import refresh_unmatched_document_reviews
 from .importers import ParsedStatement, ParsedTransaction
 from .models import (
-    Account, CategorizationRule, Category, Document, Person, StatementImport, Tag, Transaction,
+    Account, CategorizationRule, Category, Document, EmailImportConfig, EmailImportMessage,
+    Person, StatementImport, Tag, Transaction,
 )
 from .rules import apply_categorization_rules, categorization_suggestion, normalize_merchant
 from .statement_reconciliation import store_reconciliation
@@ -508,6 +510,116 @@ Gesamt 12,34 EUR
         response = self.client.get(reverse("document_archive"), {"q": "Unverwechselbarer"})
 
         self.assertContains(response, "Test")
+
+
+class EmailImportTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user("email", password="secret-test-password")
+        self.client.force_login(self.user)
+        self.config = EmailImportConfig.objects.create(
+            pk=1, enabled=True, host="imap.example.test", username="archiv@example.test",
+            folder="INBOX", allowed_senders="rechnung@example.test",
+        )
+        self.config.set_password("app-password")
+        self.config.save(update_fields=["encrypted_password"])
+
+    def _message(self):
+        message = EmailMessage()
+        message["From"] = "Rechnungen <rechnung@example.test>"
+        message["To"] = "archiv@example.test"
+        message["Subject"] = "Neue Rechnung"
+        message["Message-ID"] = "<invoice-1@example.test>"
+        message.set_content("Anhang beachten")
+        message.add_attachment(
+            b"%PDF-email-test", maintype="application", subtype="pdf", filename="rechnung.pdf"
+        )
+        return message.as_bytes()
+
+    @override_settings(EMAIL_CREDENTIAL_KEY="stable-test-encryption-key")
+    def test_password_is_encrypted_and_can_be_read(self):
+        config = EmailImportConfig(host="imap.example.test")
+        config.set_password("very-secret")
+
+        self.assertNotIn("very-secret", config.encrypted_password)
+        self.assertEqual(config.get_password(), "very-secret")
+
+    @patch("ledger.email_import.open_imap")
+    @patch("ledger.tasks.process_document_task.delay")
+    def test_poll_imports_supported_attachment_once(self, delay, open_imap):
+        class FakeImap:
+            def select(self, folder): return "OK", [b"1"]
+            def uid(self, command, *args):
+                if command == "search": return "OK", [b"42"]
+                if command == "fetch": return "OK", [(b"42 BODY[]", self.message)]
+                if command == "store": return "OK", []
+                raise AssertionError(command)
+            def logout(self): return "BYE", []
+
+        fake = FakeImap()
+        fake.message = self._message()
+        open_imap.return_value = fake
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=Path(media_root)):
+                from .email_import import poll_mailbox
+                with self.captureOnCommitCallbacks(execute=True):
+                    imported = poll_mailbox(self.config, force=True)
+                imported_again = poll_mailbox(self.config, force=True)
+
+        self.assertEqual(imported, 1)
+        self.assertEqual(imported_again, 0)
+        document = Document.objects.get(original_filename="rechnung.pdf")
+        self.assertEqual(document.kind, Document.Kind.INVOICE)
+        self.assertEqual(EmailImportMessage.objects.get().mailbox_uid, "42")
+        delay.assert_called_once_with(document.pk)
+
+    @patch("ledger.views.poll_email_import_task.delay")
+    def test_settings_save_password_and_queue_manual_fetch(self, delay):
+        response = self.client.post(reverse("save_email_settings"), {
+            "email-enabled": "on", "email-host": "imap.example.test",
+            "email-port": "993", "email-security": "ssl",
+            "email-username": "archiv@example.test", "email-password": "new-password",
+            "email-folder": "INBOX", "email-allowed_senders": "rechnung@example.test",
+            "email-poll_interval_minutes": "10", "email-mark_as_read": "on",
+            "action": "fetch",
+        })
+
+        self.config.refresh_from_db()
+        self.assertRedirects(response, reverse("settings"))
+        self.assertEqual(self.config.get_password(), "new-password")
+        delay.assert_called_once_with(self.config.pk, force=True)
+        settings_response = self.client.get(reverse("settings"))
+        self.assertNotContains(settings_response, "new-password")
+        self.assertContains(settings_response, "E-Mail-Import über IMAP")
+
+    def test_unapproved_sender_is_logged_without_import(self):
+        message = EmailMessage()
+        message["From"] = "unknown@example.test"
+        message["Subject"] = "Nicht erlaubt"
+        message.set_content("Text")
+        message.add_attachment(
+            b"%PDF-rejected", maintype="application", subtype="pdf", filename="no.pdf"
+        )
+        from .email_import import _import_message
+
+        imported = _import_message(self.config, "43", message.as_bytes())
+
+        self.assertEqual(imported, 0)
+        self.assertFalse(Document.objects.filter(original_filename="no.pdf").exists())
+        self.assertIn("nicht freigegeben", EmailImportMessage.objects.get().error_message)
+
+    @patch("ledger.email_import.test_imap_connection")
+    def test_connection_test_uses_saved_configuration(self, test_connection):
+        response = self.client.post(reverse("save_email_settings"), {
+            "email-enabled": "on", "email-host": "imap.example.test",
+            "email-port": "993", "email-security": "ssl",
+            "email-username": "archiv@example.test", "email-password": "",
+            "email-folder": "INBOX", "email-allowed_senders": "rechnung@example.test",
+            "email-poll_interval_minutes": "5", "email-mark_as_read": "on",
+            "action": "test",
+        })
+
+        self.assertRedirects(response, reverse("settings"))
+        test_connection.assert_called_once()
 
     def test_receipt_uploaded_before_statement_is_rematched_later(self):
         receipt = Document.objects.create(

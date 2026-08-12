@@ -29,7 +29,7 @@ verify_checksums() {
 cleanup() {
   rm -rf "${temp_dir}"
   if [[ "${services_stopped}" == "1" ]]; then
-    "${compose[@]}" up -d web worker >/dev/null || true
+    "${compose[@]}" up -d web worker beat >/dev/null || true
   fi
 }
 trap cleanup EXIT
@@ -51,7 +51,7 @@ done
   verify_checksums
 )
 
-"${compose[@]}" stop web worker
+"${compose[@]}" stop web worker beat
 services_stopped=1
 "${compose[@]}" up -d --wait db
 "${compose[@]}" exec -T db sh -c \
@@ -64,6 +64,6 @@ services_stopped=1
 "${compose[@]}" run --rm -T --no-deps web tar -C /app/media -xf - \
   < "${temp_dir}/documents.tar"
 
-"${compose[@]}" up -d web worker
+"${compose[@]}" up -d web worker beat
 services_stopped=0
 printf 'Wiederherstellung abgeschlossen. Gesicherte environment.env wurde nicht automatisch eingespielt.\n'

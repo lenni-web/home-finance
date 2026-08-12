@@ -215,3 +215,53 @@ class CategorizationRule(TimestampedModel):
 
     def __str__(self):
         return self.name
+
+
+class EmailImportConfig(TimestampedModel):
+    class Security(models.TextChoices):
+        SSL = "ssl", "SSL/TLS"
+        STARTTLS = "starttls", "STARTTLS"
+
+    enabled = models.BooleanField(default=False)
+    host = models.CharField(max_length=255, blank=True)
+    port = models.PositiveIntegerField(default=993)
+    security = models.CharField(max_length=20, choices=Security.choices, default=Security.SSL)
+    username = models.CharField(max_length=255, blank=True)
+    encrypted_password = models.TextField(blank=True, editable=False)
+    folder = models.CharField(max_length=255, default="INBOX")
+    allowed_senders = models.TextField(
+        blank=True,
+        help_text="Eine Adresse pro Zeile. Leer bedeutet: alle Absender akzeptieren.",
+    )
+    poll_interval_minutes = models.PositiveIntegerField(default=5)
+    mark_as_read = models.BooleanField(default=True)
+    last_checked_at = models.DateTimeField(null=True, blank=True)
+    last_success_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.TextField(blank=True)
+
+    def set_password(self, password):
+        from .email_import import encrypt_password
+        self.encrypted_password = encrypt_password(password) if password else ""
+
+    def get_password(self):
+        from .email_import import decrypt_password
+        return decrypt_password(self.encrypted_password) if self.encrypted_password else ""
+
+    def __str__(self):
+        return self.username or "E-Mail-Import"
+
+
+class EmailImportMessage(TimestampedModel):
+    config = models.ForeignKey(EmailImportConfig, on_delete=models.CASCADE)
+    mailbox_uid = models.CharField(max_length=255)
+    message_id = models.CharField(max_length=998, blank=True)
+    sender = models.CharField(max_length=320, blank=True)
+    subject = models.CharField(max_length=998, blank=True)
+    attachment_count = models.PositiveIntegerField(default=0)
+    error_message = models.TextField(blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(
+            fields=["config", "mailbox_uid"], name="unique_email_import_uid"
+        )]
+        ordering = ["-created_at"]
