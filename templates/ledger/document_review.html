@@ -13,7 +13,7 @@
     iframe,.image-preview { width:100%; height:720px; border:1px solid #e2e8f0; object-fit:contain; background:#f1f5f9; }
     label { display:block; font-weight:650; margin-top:.6rem; }
     input,select { box-sizing:border-box; width:100%; padding:.5rem; }
-    ul { list-style:none; padding:0; } button { border:0; border-radius:8px; padding:.7rem 1rem; background:#0f766e; color:white; cursor:pointer; }
+    ul { list-style:none; padding:0; } button,.button-link { display:inline-block; border:0; border-radius:8px; padding:.7rem 1rem; background:#0f766e; color:white; font:inherit; font-weight:650; text-decoration:none; cursor:pointer; }
     .secondary { background:#475569; } .error { color:#b91c1c; white-space:pre-wrap; }
     pre { white-space:pre-wrap; max-height:300px; overflow:auto; background:#f8fafc; padding:1rem; }
     @media(max-width:850px){header,.grid{display:block;} iframe,.image-preview{height:480px;}}
@@ -24,7 +24,7 @@
   {% for message in messages %}<div class="card">{{ message }}</div>{% endfor %}
   {% if document.processing_error %}<div class="card error">{{ document.processing_error }}</div>{% endif %}
   <div class="grid">
-    <section class="card"><h2>Original</h2>{% if document.file.name|lower|slice:"-4:" == ".pdf" %}<iframe src="{% url 'document_download' document.pk %}" title="Dokumentvorschau"></iframe>{% else %}<img class="image-preview" src="{% url 'document_download' document.pk %}" alt="Dokumentvorschau">{% endif %}<p><a href="{% url 'document_download' document.pk %}?download=1">Original herunterladen</a></p></section>
+    <section class="card"><h2>Original</h2>{% if document.file.name|lower|slice:"-4:" == ".pdf" %}<iframe src="{% url 'document_download' document.pk %}" title="Dokumentvorschau"></iframe>{% else %}<img class="image-preview" src="{% url 'document_download' document.pk %}" alt="Dokumentvorschau">{% endif %}<p><a class="button-link" href="{% url 'document_download' document.pk %}?download=1">Original herunterladen</a></p></section>
     <section class="card"><h2>Erkannte Angaben</h2><form method="post">{% csrf_token %}{{ review_form.as_p }}{{ link_form.as_p }}<button name="action" value="save">Speichern und abschließen</button>{% if document.kind != "bank_statement" %} <button class="secondary" name="action" value="retry">Erneut analysieren</button>{% endif %}</form></section>
   </div>
   <details class="card"><summary>Erkannten Text anzeigen</summary><pre>{{ document.extracted_text }}</pre></details>

@@ -24,8 +24,8 @@
     .muted { color: #64748b; font-size: .82rem; }
     .suggestion { display: block; margin-top: .35rem; color: #7c3aed; font-size: .78rem; }
     .bulk-grid > p { flex: 1; margin: 0; } .bulk-grid > p:first-child { flex: 1.3; }
-    button { border: 0; border-radius: 8px; padding: .7rem 1rem; background: #0f766e; color: white; cursor: pointer; }
-    .secondary { background: #334155; }
+    button,.button-link { display:inline-block; border:0; border-radius:8px; padding:.7rem 1rem; background:#0f766e; color:white; font:inherit; font-weight:650; text-decoration:none; cursor:pointer; }
+    .secondary { background:#334155; }
     .actions { position: sticky; bottom: 0; padding: 1rem; background: rgba(248,250,252,.96); display: flex; justify-content: flex-end; gap: .75rem; }
     .messages { border-left: 4px solid #0f766e; }
     @media (max-width: 800px) { header, .summary, .filters, .bulk-grid { display: block; } .metric { margin-bottom: .7rem; } }
@@ -39,7 +39,7 @@
     <div class="card metric">Ausgaben<strong class="negative">{{ totals.expenses|money }} €</strong></div>
     <div class="card metric">Differenz<strong>{{ totals.balance|money }} €</strong></div>
   </section>
-  <section class="card"><form method="get"><div class="filters">{{ filters.as_p }}</div><p><button>Filter anwenden</button> <a href="{% url 'transaction_overview' %}">Zurücksetzen</a></p></form></section>
+  <section class="card"><form method="get"><div class="filters">{{ filters.as_p }}</div><p><button>Filter anwenden</button> <a class="button-link secondary" href="{% url 'transaction_overview' %}">Zurücksetzen</a></p></form></section>
   <form method="post">{% csrf_token %}{{ formset.management_form }}{{ formset.non_form_errors }}
     <section class="card"><h2>Auswahl gemeinsam bearbeiten</h2><div class="bulk-grid">{{ bulk_form.as_p }}</div><p><button name="action" value="bulk">Auf markierte Buchungen anwenden</button></p></section>
     <section class="card table-wrap"><table><thead><tr><th><input class="selection-checkbox" type="checkbox" aria-label="Alle auswählen" onclick="document.querySelectorAll('[name=selected]').forEach(x => x.checked=this.checked)"></th><th>Datum</th><th>Konto</th><th>Zahlungspartner / Zweck</th><th>Betrag</th><th>Kategorie</th><th>Tags</th><th>Personen</th></tr></thead><tbody>

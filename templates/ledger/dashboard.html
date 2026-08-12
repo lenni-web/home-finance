@@ -28,6 +28,7 @@
     input,select { width:100%; padding:.68rem .75rem; border:1px solid #cbd5e1; border-radius:9px; background:white; font:inherit; }
     input[type=file] { background:#f8fafc; }
     button.primary { padding:.75rem 1.05rem; border:0; border-radius:9px; background:#0f766e; color:white; font-weight:750; cursor:pointer; }
+    .button-link { display:inline-block; border-radius:8px; padding:.55rem .8rem; background:#0f766e; color:white; font-weight:650; text-decoration:none; }
     .side-stack { display:grid; gap:1rem; }
     .quick-link { display:flex; justify-content:space-between; align-items:center; padding:.8rem 0; border-bottom:1px solid #e2e8f0; color:#172033; text-decoration:none; font-weight:650; }
     .quick-link:last-child { border:0; } .quick-link span { color:#0f766e; }
@@ -72,6 +73,6 @@
   </tbody></table></section>
   <div class="section-head"><div><h2>Kontoauszüge</h2><span class="muted">Importstatus und rechnerische Saldo-Prüfung</span></div></div>
   <section class="card table-wrap"><table><thead><tr><th>Konto</th><th>Dokument</th><th>Verarbeitung</th><th>Saldo-Prüfung</th><th>Buchungen</th><th></th></tr></thead><tbody>
-    {% for statement in statement_imports %}<tr><td><strong>{{ statement.account }}</strong></td><td>{{ statement.document }}</td><td><span class="status">{{ statement.get_status_display }}</span></td><td>{% if statement.reconciliation_status == "balanced" %}<span class="status good">✓ {{ statement.get_reconciliation_status_display }}</span>{% elif statement.reconciliation_status == "mismatch" %}<span class="status warn">⚠ {{ statement.get_reconciliation_status_display }} · {{ statement.reconciliation_difference|money }} €</span>{% else %}<span class="status">{{ statement.get_reconciliation_status_display }}</span>{% endif %}</td><td>{{ statement.transactions.count }}</td><td>{% if statement.status == "review" %}<a href="{% url 'statement_review' statement.pk %}">Jetzt prüfen →</a>{% endif %}</td></tr>{% empty %}<tr><td colspan="6" class="empty">Noch keine Kontoauszüge vorhanden.</td></tr>{% endfor %}
+    {% for statement in statement_imports %}<tr><td><strong>{{ statement.account }}</strong></td><td>{{ statement.document }}</td><td><span class="status">{{ statement.get_status_display }}</span></td><td>{% if statement.reconciliation_status == "balanced" %}<span class="status good">✓ {{ statement.get_reconciliation_status_display }}</span>{% elif statement.reconciliation_status == "mismatch" %}<span class="status warn">⚠ {{ statement.get_reconciliation_status_display }} · {{ statement.reconciliation_difference|money }} €</span>{% else %}<span class="status">{{ statement.get_reconciliation_status_display }}</span>{% endif %}</td><td>{{ statement.transactions.count }}</td><td>{% if statement.status == "review" %}<a class="button-link" href="{% url 'statement_review' statement.pk %}">Jetzt prüfen</a>{% endif %}</td></tr>{% empty %}<tr><td colspan="6" class="empty">Noch keine Kontoauszüge vorhanden.</td></tr>{% endfor %}
   </tbody></table></section>
 </body></html>
