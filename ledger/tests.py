@@ -531,6 +531,10 @@ class CategorizationWorkflowTests(TestCase):
     def test_dashboard_contains_monthly_analysis_and_open_tasks(self):
         response = self.client.get(reverse("dashboard"), {"month": "2026-07"})
 
+        self.assertContains(response, 'class="dashboard-brand"')
+        self.assertNotContains(
+            response, "Dokumente erfassen, Buchungen prüfen und Ausgaben zuordnen."
+        )
         self.assertContains(response, "Monatsauswertung")
         self.assertContains(response, "42,50 €")
         self.assertContains(response, "Ohne Kategorie")

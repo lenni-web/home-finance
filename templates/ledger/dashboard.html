@@ -7,8 +7,9 @@
   <style>
     :root { font-family:Inter,ui-sans-serif,system-ui,sans-serif; color:#172033; background:#f1f5f9; }
     * { box-sizing:border-box; } body { max-width:1240px; margin:auto; padding:1.5rem; }
-    header { display:flex; justify-content:space-between; align-items:flex-start; gap:1.5rem; }
-    h1 { margin:.1rem 0 .25rem; letter-spacing:-.035em; font-size:2rem; } h2 { margin:.15rem 0 .3rem; font-size:1.15rem; }
+    header { display:flex; justify-content:space-between; align-items:center; gap:1.5rem; }
+    .dashboard-brand { flex:0 0 auto; }
+    h1 { margin:.05rem 0 0; letter-spacing:-.035em; font-size:1.65rem; white-space:nowrap; } h2 { margin:.15rem 0 .3rem; font-size:1.15rem; }
     p { color:#64748b; line-height:1.5; }
     .eyebrow { color:#0f766e; font-size:.78rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
     .card { background:white; border:1px solid #dbe3ec; border-radius:16px; padding:1.2rem; box-shadow:0 5px 20px rgba(15,23,42,.04); }
@@ -43,12 +44,12 @@
     .tag { background:#ccfbf1; color:#115e59; } .status { background:#f1f5f9; color:#475569; }
     .status.good { background:#dcfce7; color:#166534; } .status.warn { background:#fef3c7; color:#92400e; }
     .muted { color:#64748b; } .empty { padding:1.4rem; text-align:center; color:#64748b; }
-    @media(max-width:1100px){header{display:block}}
+    @media(max-width:1100px){header{display:block}.dashboard-brand{margin-bottom:.35rem}}
     @media(max-width:850px){body{padding:1rem}.top-grid,.analytics-grid{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,1fr)}.section-head{align-items:center}}
   </style>
 </head>
 <body>
-  <header><div><div class="eyebrow">Home Finance</div><h1>Finanzen im Blick</h1><p>Dokumente erfassen, Buchungen prüfen und Ausgaben zuordnen.</p></div>{% include "ledger/_navigation.html" %}</header>
+  <header><div class="dashboard-brand"><div class="eyebrow">Home Finance</div><h1>Finanzen im Blick</h1></div>{% include "ledger/_navigation.html" %}</header>
   {% for message in messages %}<div class="card message">{{ message }}</div>{% endfor %}
   <div class="section-head"><div><h2>Monatsauswertung</h2><span class="muted">{{ selected_month_date|date:"F Y" }}</span></div><form class="month-form" method="get"><label>Monat<input type="month" name="month" value="{{ selected_month }}"></label><button>Anzeigen</button></form></div>
   <section class="metrics">
