@@ -1,9 +1,10 @@
 import tempfile
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from email.message import EmailMessage
 from pathlib import Path
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.conf import settings
@@ -18,8 +19,8 @@ from .document_processing import (
 from .document_matching import auto_match_document, refresh_unmatched_document_reviews
 from .importers import ParsedStatement, ParsedTransaction
 from .models import (
-    Account, CategorizationRule, Category, Document, EmailImportConfig, EmailImportMessage,
-    Person, StatementImport, Tag, Transaction,
+    Account, BackupRecord, CategorizationRule, Category, Document, EmailImportConfig,
+    EmailImportMessage, Person, ServiceHeartbeat, StatementImport, Tag, Transaction,
 )
 from .rules import apply_categorization_rules, categorization_suggestion, normalize_merchant
 from .statement_reconciliation import store_reconciliation
@@ -122,6 +123,18 @@ class AccessControlTests(TestCase):
         self.assertEqual(self.client.get(url).status_code, 302)
         self.client.force_login(self.user)
         self.assertContains(self.client.get(url), "Betriebsstatus")
+
+    @override_settings(TIME_ZONE="Europe/Berlin")
+    def test_operational_status_displays_timestamps_in_german_local_time(self):
+        utc_timestamp = datetime(2026, 8, 12, 15, 55, tzinfo=ZoneInfo("UTC"))
+        BackupRecord.objects.create(filename="backup.tar.gz", created_at=utc_timestamp)
+        ServiceHeartbeat.objects.create(name="worker", last_seen_at=utc_timestamp)
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("operational_status"))
+
+        self.assertContains(response, "12.08.2026 17:55", count=2)
+        self.assertNotContains(response, "12.08.2026 15:55")
 
 
 class StatementWorkflowTests(TestCase):

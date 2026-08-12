@@ -808,11 +808,14 @@ def operational_status(request):
         ("Datenbank", database_ok, "Verbindung erfolgreich" if database_ok else "Nicht erreichbar"),
         (
             "Hintergrund-Worker", worker_ok,
-            f"Letztes Signal {worker.last_seen_at:%d.%m.%Y %H:%M}" if worker else "Noch kein Signal",
+            "Letztes Signal "
+            f"{timezone.localtime(worker.last_seen_at):%d.%m.%Y %H:%M}"
+            if worker else "Noch kein Signal",
         ),
         (
             "Automatisches Backup", backup_ok,
-            f"{latest_backup.filename} · {latest_backup.created_at:%d.%m.%Y %H:%M}"
+            f"{latest_backup.filename} · "
+            f"{timezone.localtime(latest_backup.created_at):%d.%m.%Y %H:%M}"
             if latest_backup else "Noch kein protokolliertes Backup",
         ),
         (
