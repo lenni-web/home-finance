@@ -75,9 +75,11 @@ class Document(TimestampedModel):
     sha256 = models.CharField(max_length=64, unique=True, editable=False)
     document_date = models.DateField(null=True, blank=True, db_index=True)
     merchant = models.CharField(max_length=255, blank=True)
+    invoice_number = models.CharField(max_length=120, blank=True)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     currency = models.CharField(max_length=3, default="EUR")
     extracted_text = models.TextField(blank=True)
+    extraction_confidence = models.JSONField(default=dict, blank=True)
     processing_status = models.CharField(
         max_length=20, choices=ProcessingStatus.choices, default=ProcessingStatus.PENDING
     )

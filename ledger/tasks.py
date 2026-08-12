@@ -9,6 +9,8 @@ from .statement_processing import process_statement_import
 def process_document_task(document_id):
     document = Document.objects.get(pk=document_id)
     process_document(document)
+    from .document_matching import auto_match_document
+    auto_match_document(document)
     return document_id
 
 

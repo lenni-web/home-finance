@@ -18,7 +18,10 @@ from .forms import (
     DocumentUploadForm, EmailImportConfigForm, PersonForm, TagForm, TransactionCategorizationFormSet,
     TransactionFilterForm, TransactionReviewFormSet,
 )
-from .document_matching import document_transaction_candidates, refresh_unmatched_document_reviews
+from .document_matching import (
+    document_transaction_candidates, refresh_unmatched_document_reviews,
+    scored_document_transaction_candidates,
+)
 from .importers import INGStatementParser
 from .models import (
     Account, CategorizationRule, Category, Document, EmailImportConfig, EmailImportMessage,
@@ -528,7 +531,16 @@ def document_review(request, pk):
         Document.objects.select_related("category").prefetch_related("tags", "people", "transactions"),
         pk=pk,
     )
+    scored_candidates = scored_document_transaction_candidates(document)
     candidates = document_transaction_candidates(document)
+    detail_map = {
+        candidate.transaction.pk: (
+            f"{candidate.confidence} % passend: {', '.join(candidate.reasons)}"
+        )
+        for candidate in scored_candidates
+    }
+    for candidate in candidates:
+        candidate.match_details = detail_map.get(candidate.pk, "")
     if request.method == "POST":
         if request.POST.get("action") == "retry":
             process_document_task.delay(document.pk)
@@ -536,7 +548,7 @@ def document_review(request, pk):
             return redirect("document_review", pk=document.pk)
         review_form = DocumentReviewForm(request.POST, instance=document, prefix="document")
         link_form = DocumentTransactionLinkForm(
-            request.POST, queryset=candidates, prefix="links"
+            request.POST, queryset=candidates, candidate_details=detail_map, prefix="links"
         )
         if review_form.is_valid() and link_form.is_valid():
             document = review_form.save()
@@ -548,7 +560,7 @@ def document_review(request, pk):
     else:
         review_form = DocumentReviewForm(instance=document, prefix="document")
         link_form = DocumentTransactionLinkForm(
-            queryset=candidates,
+            queryset=candidates, candidate_details=detail_map,
             prefix="links",
             initial={"transactions": document.transactions.all()},
         )
@@ -556,6 +568,7 @@ def document_review(request, pk):
         "document": document,
         "review_form": review_form,
         "link_form": link_form,
+        "extraction_confidence": document.extraction_confidence,
     })
 
 
@@ -573,6 +586,16 @@ def document_archive(request):
                 queryset = queryset.filter(document_date__year=year, document_date__month=month)
             except (TypeError, ValueError):
                 filters.add_error("month", "Bitte einen gültigen Monat auswählen.")
+        if values.get("date_from"):
+            queryset = queryset.filter(document_date__gte=values["date_from"])
+        if values.get("date_to"):
+            queryset = queryset.filter(document_date__lte=values["date_to"])
+        if values.get("category"):
+            queryset = queryset.filter(category=values["category"])
+        if values.get("link_status") == "linked":
+            queryset = queryset.filter(transactions__isnull=False)
+        elif values.get("link_status") == "unlinked":
+            queryset = queryset.filter(transactions__isnull=True)
         if values.get("kind"):
             queryset = queryset.filter(kind=values["kind"])
         if values.get("tag"):
@@ -583,6 +606,7 @@ def document_archive(request):
             queryset = queryset.filter(
                 Q(title__icontains=values["q"])
                 | Q(merchant__icontains=values["q"])
+                | Q(invoice_number__icontains=values["q"])
                 | Q(original_filename__icontains=values["q"])
                 | Q(extracted_text__icontains=values["q"])
             )

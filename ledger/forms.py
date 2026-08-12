@@ -148,7 +148,11 @@ class DocumentReviewForm(forms.ModelForm):
 
     class Meta:
         model = Document
-        fields = ["title", "document_date", "merchant", "total_amount", "category", "tags"]
+        fields = [
+            "title", "document_date", "merchant", "invoice_number", "total_amount",
+            "category", "tags",
+        ]
+        labels = {"invoice_number": "Rechnungsnummer"}
         widgets = {
             "document_date": forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
             "tags": forms.SelectMultiple(attrs={"size": 4}),
@@ -174,19 +178,27 @@ class DocumentTransactionLinkForm(forms.Form):
         label="Passende Kontobewegungen",
     )
 
-    def __init__(self, *args, queryset=None, **kwargs):
+    def __init__(self, *args, queryset=None, candidate_details=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.candidate_details = candidate_details or {}
         if queryset is not None:
             self.fields["transactions"].queryset = queryset
         self.fields["transactions"].label_from_instance = self.transaction_label
 
-    @staticmethod
-    def transaction_label(item):
+    def transaction_label(self, item):
         amount = number_format(item.amount, decimal_pos=2, use_l10n=True, force_grouping=True)
-        return f"{item.booking_date:%d.%m.%Y} · {item.counterparty} · {amount} €"
+        details = self.candidate_details.get(item.pk, "")
+        suffix = f" · {details}" if details else ""
+        return f"{item.booking_date:%d.%m.%Y} · {item.counterparty} · {amount} €{suffix}"
 
 
 class DocumentArchiveFilterForm(forms.Form):
+    date_from = forms.DateField(
+        required=False, label="Von", widget=forms.DateInput(attrs={"type": "date"})
+    )
+    date_to = forms.DateField(
+        required=False, label="Bis", widget=forms.DateInput(attrs={"type": "date"})
+    )
     month = forms.CharField(required=False, widget=forms.TextInput(attrs={"type": "month"}))
     kind = forms.ChoiceField(
         required=False, choices=[("", "Alle Dokumenttypen"), *Document.Kind.choices]
@@ -195,7 +207,18 @@ class DocumentArchiveFilterForm(forms.Form):
     person = forms.ModelChoiceField(
         queryset=Person.objects.all(), required=False, empty_label="Alle Personen"
     )
-    q = forms.CharField(required=False, label="Suche")
+    category = forms.ModelChoiceField(
+        queryset=Category.objects.all(), required=False, empty_label="Alle Kategorien"
+    )
+    link_status = forms.ChoiceField(
+        required=False,
+        label="Zuordnung",
+        choices=[("", "Alle"), ("linked", "Zugeordnet"), ("unlinked", "Nicht zugeordnet")],
+    )
+    q = forms.CharField(
+        required=False, label="Suche",
+        widget=forms.TextInput(attrs={"placeholder": "Händler, Rechnungsnummer oder Datei"}),
+    )
 
 
 class TransactionReviewForm(forms.ModelForm):

@@ -15,6 +15,10 @@ from .models import Document
 DATE_RE = re.compile(r"\b([0-3]?\d[./-][01]?\d[./-](?:20)?\d{2})\b")
 AMOUNT_RE = re.compile(r"(?<!\d)(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2})(?:\s*(?:EUR|€))?", re.I)
 TOTAL_HINTS = ("gesamt", "summe", "total", "zu zahlen", "rechnungsbetrag", "endbetrag")
+INVOICE_NUMBER_RE = re.compile(
+    r"(?:rechnungs(?:nummer|nr\.?|[- ]?nr\.?|[- ]?no\.?)|invoice(?: number| no\.?)?)\s*[:#]?\s*([A-Z0-9][A-Z0-9./_-]{2,})",
+    re.I,
+)
 MERCHANT_EXCLUDES = (
     "rechnung", "kassenbon", "quittung", "datum", "seite", "kunden", "beleg", "steuer",
     "ust-id", "iban", "betrag",
@@ -27,6 +31,8 @@ class DocumentExtraction:
     document_date: date | None
     merchant: str
     total_amount: Decimal | None
+    invoice_number: str
+    confidence: dict
 
 
 def extract_document_text(path: Path) -> str:
@@ -111,13 +117,29 @@ def _parse_merchant(text: str) -> str:
     return ""
 
 
+def _parse_invoice_number(text: str) -> str:
+    match = INVOICE_NUMBER_RE.search(text)
+    return match.group(1).strip(".,") if match else ""
+
+
 def analyze_document(path: Path) -> DocumentExtraction:
     text = extract_document_text(path)
+    document_date = _parse_date(text)
+    merchant = _parse_merchant(text)
+    total_amount = _parse_total(text)
+    invoice_number = _parse_invoice_number(text)
     return DocumentExtraction(
         text=text,
-        document_date=_parse_date(text),
-        merchant=_parse_merchant(text),
-        total_amount=_parse_total(text),
+        document_date=document_date,
+        merchant=merchant,
+        total_amount=total_amount,
+        invoice_number=invoice_number,
+        confidence={
+            "document_date": 90 if document_date else 0,
+            "merchant": 75 if merchant else 0,
+            "total_amount": 90 if total_amount is not None else 0,
+            "invoice_number": 90 if invoice_number else 0,
+        },
     )
 
 
@@ -132,14 +154,18 @@ def process_document(document: Document) -> DocumentExtraction:
             document.document_date = result.document_date
         if not document.merchant:
             document.merchant = result.merchant
+        if not document.invoice_number:
+            document.invoice_number = result.invoice_number
         if document.total_amount is None:
             document.total_amount = result.total_amount
         if not document.title:
             document.title = result.merchant or document.original_filename
         document.processing_status = Document.ProcessingStatus.REVIEW
+        document.extraction_confidence = result.confidence
         document.extracted_at = timezone.now()
         document.save(update_fields=[
-            "extracted_text", "document_date", "merchant", "total_amount", "title",
+            "extracted_text", "document_date", "merchant", "invoice_number", "total_amount", "title",
+            "extraction_confidence",
             "processing_status", "extracted_at", "updated_at",
         ])
         return result

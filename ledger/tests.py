@@ -12,8 +12,8 @@ from django.test import TestCase, override_settings
 from django.template import Context, Template
 from django.urls import reverse
 
-from .document_processing import _parse_date, _parse_merchant, _parse_total
-from .document_matching import refresh_unmatched_document_reviews
+from .document_processing import _parse_date, _parse_invoice_number, _parse_merchant, _parse_total
+from .document_matching import auto_match_document, refresh_unmatched_document_reviews
 from .importers import ParsedStatement, ParsedTransaction
 from .models import (
     Account, CategorizationRule, Category, Document, EmailImportConfig, EmailImportMessage,
@@ -51,6 +51,12 @@ class DocumentModelTests(TestCase):
                 self.assertEqual(document.tags.get(), tag)
                 self.assertEqual(document.people.get(), person)
                 self.assertIn("documents/2026/08/", document.file.name)
+
+    def test_invoice_number_is_extracted(self):
+        self.assertEqual(
+            _parse_invoice_number("Rechnungsnummer: RE-2026/4711\nGesamt 12,50 EUR"),
+            "RE-2026/4711",
+        )
 
 
 class AccessControlTests(TestCase):
@@ -749,6 +755,59 @@ Gesamt 12,34 EUR
         self.assertEqual(receipt.processing_status, Document.ProcessingStatus.PROCESSED)
         self.assertEqual(receipt.transactions.get(), transaction)
 
+    def test_document_is_automatically_linked_for_one_high_confidence_match(self):
+        account = Account.objects.create(name="Automatik")
+        statement_document = Document.objects.create(
+            kind=Document.Kind.BANK_STATEMENT, original_filename="auto-statement.pdf",
+            file=SimpleUploadedFile("auto-statement.pdf", b"%PDF-auto-statement", "application/pdf"),
+        )
+        statement = StatementImport.objects.create(
+            document=statement_document, account=account, status=StatementImport.Status.IMPORTED,
+        )
+        transaction = Transaction.objects.create(
+            statement_import=statement, booking_date=date(2026, 8, 5),
+            counterparty="Musterladen Berlin", amount="-12.34",
+            source_fingerprint="7" * 64, reviewed=True,
+        )
+        receipt = Document.objects.create(
+            kind=Document.Kind.RECEIPT, original_filename="auto-receipt.pdf",
+            file=SimpleUploadedFile("auto-receipt.pdf", b"%PDF-auto-receipt", "application/pdf"),
+            document_date=date(2026, 8, 5), merchant="Musterladen", total_amount="12.34",
+            processing_status=Document.ProcessingStatus.REVIEW,
+        )
+
+        match = auto_match_document(receipt)
+
+        receipt.refresh_from_db()
+        self.assertIsNotNone(match)
+        self.assertEqual(match.confidence, 90)
+        self.assertEqual(receipt.transactions.get(), transaction)
+        self.assertEqual(receipt.processing_status, Document.ProcessingStatus.PROCESSED)
+
+    def test_ambiguous_document_matches_are_not_linked_automatically(self):
+        account = Account.objects.create(name="Mehrdeutig")
+        statement_document = Document.objects.create(
+            kind=Document.Kind.BANK_STATEMENT, original_filename="ambiguous.pdf",
+            file=SimpleUploadedFile("ambiguous.pdf", b"%PDF-ambiguous", "application/pdf"),
+        )
+        statement = StatementImport.objects.create(
+            document=statement_document, account=account, status=StatementImport.Status.IMPORTED,
+        )
+        for number in range(2):
+            Transaction.objects.create(
+                statement_import=statement, booking_date=date(2026, 8, 5),
+                counterparty="Musterladen", amount="-12.34",
+                source_fingerprint=str(number + 4) * 64, reviewed=True,
+            )
+        receipt = Document.objects.create(
+            kind=Document.Kind.RECEIPT, original_filename="ambiguous-receipt.pdf",
+            file=SimpleUploadedFile("ambiguous-receipt.pdf", b"%PDF-ambiguous-receipt", "application/pdf"),
+            document_date=date(2026, 8, 5), merchant="Musterladen", total_amount="12.34",
+        )
+
+        self.assertIsNone(auto_match_document(receipt))
+        self.assertFalse(receipt.transactions.exists())
+
     def test_archive_searches_extracted_text(self):
         Document.objects.create(
             kind=Document.Kind.INVOICE,
@@ -761,6 +820,56 @@ Gesamt 12,34 EUR
         response = self.client.get(reverse("document_archive"), {"q": "Unverwechselbarer"})
 
         self.assertContains(response, "Test")
+
+    def test_archive_filters_invoice_number_date_category_and_link_status(self):
+        category = Category.objects.create(name="Büro")
+        matching = Document.objects.create(
+            kind=Document.Kind.INVOICE, title="Gesuchte Rechnung",
+            original_filename="invoice-filter.pdf", invoice_number="RE-4711",
+            document_date=date(2026, 8, 3), category=category,
+            file=SimpleUploadedFile("invoice-filter.pdf", b"%PDF-filter", "application/pdf"),
+        )
+        Document.objects.create(
+            kind=Document.Kind.INVOICE, title="Andere Rechnung",
+            original_filename="other-filter.pdf", invoice_number="RE-9999",
+            document_date=date(2026, 7, 3),
+            file=SimpleUploadedFile("other-filter.pdf", b"%PDF-other-filter", "application/pdf"),
+        )
+
+        response = self.client.get(reverse("document_archive"), {
+            "q": "RE-4711", "date_from": "2026-08-01", "date_to": "2026-08-31",
+            "category": str(category.pk), "link_status": "unlinked",
+        })
+
+        self.assertContains(response, matching.title)
+        self.assertNotContains(response, "Andere Rechnung")
+
+    def test_document_review_explains_match_confidence(self):
+        account = Account.objects.create(name="Erklärtes Matching")
+        statement_document = Document.objects.create(
+            kind=Document.Kind.BANK_STATEMENT, original_filename="explained.pdf",
+            file=SimpleUploadedFile("explained.pdf", b"%PDF-explained", "application/pdf"),
+        )
+        statement = StatementImport.objects.create(
+            document=statement_document, account=account, status=StatementImport.Status.IMPORTED,
+        )
+        Transaction.objects.create(
+            statement_import=statement, booking_date=date(2026, 8, 8),
+            counterparty="Erklärladen", amount="-21.00",
+            source_fingerprint="8" * 64, reviewed=True,
+        )
+        receipt = Document.objects.create(
+            kind=Document.Kind.RECEIPT, original_filename="explained-receipt.pdf",
+            file=SimpleUploadedFile("explained-receipt.pdf", b"%PDF-explained-receipt", "application/pdf"),
+            document_date=date(2026, 8, 8), merchant="Erklärladen", total_amount="21.00",
+            extraction_confidence={"merchant": 75, "document_date": 90, "total_amount": 90},
+        )
+
+        response = self.client.get(reverse("document_review", args=[receipt.pk]))
+
+        self.assertContains(response, "90 % passend")
+        self.assertContains(response, "gleicher Betrag")
+        self.assertContains(response, "Händler: 75 %")
 
 
 class EmailImportTests(TestCase):

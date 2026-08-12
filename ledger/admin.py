@@ -10,7 +10,9 @@ from .models import (
 class DocumentAdmin(admin.ModelAdmin):
     list_display = ("document_date", "kind", "title", "merchant", "total_amount", "category")
     list_filter = ("kind", "category", "tags", "people")
-    search_fields = ("title", "merchant", "original_filename", "extracted_text")
+    search_fields = (
+        "title", "merchant", "invoice_number", "original_filename", "extracted_text"
+    )
     date_hierarchy = "document_date"
 
 
