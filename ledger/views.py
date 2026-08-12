@@ -135,7 +135,7 @@ def open_tasks(request):
             reconciliation_status=StatementImport.ReconciliationStatus.MISMATCH
         ).select_related("account", "document"),
         "uncategorized": Transaction.objects.filter(reviewed=True, category__isnull=True)
-            .select_related("statement_import__account")[:25],
+            .select_related("statement_import__account"),
     })
 
 

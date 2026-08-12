@@ -469,6 +469,25 @@ class CategorizationWorkflowTests(TestCase):
         self.assertContains(response, "Beispielmarkt Berlin")
         self.assertContains(response, "Buchungen ohne Kategorie")
 
+    def test_open_tasks_lists_all_uncategorized_transactions(self):
+        Transaction.objects.bulk_create([
+            Transaction(
+                statement_import=self.statement,
+                booking_date=date(2026, 8, 2),
+                counterparty=f"Noch offen {number:02d}",
+                amount="-1.00",
+                source_fingerprint=f"{number:064x}",
+                reviewed=True,
+            )
+            for number in range(1, 27)
+        ])
+
+        response = self.client.get(reverse("open_tasks"))
+
+        self.assertContains(response, "Noch offen 01")
+        self.assertContains(response, "Noch offen 26")
+        self.assertContains(response, '<div class="card metric">Ohne Kategorie<strong>27</strong></div>', html=True)
+
     def test_learns_suggestion_from_confirmed_normalized_merchant(self):
         category = Category.objects.create(name="Lebensmittel")
         self.item.category = category
