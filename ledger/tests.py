@@ -301,6 +301,12 @@ class CategorizationWorkflowTests(TestCase):
         self.assertContains(response, 'name="transactions-0-people" size="4"')
         self.assertContains(response, 'name="bulk-people" size="4"')
 
+    def test_transaction_selection_uses_large_checkbox_style(self):
+        response = self.client.get(reverse("transaction_overview"))
+
+        self.assertContains(response, "selection-checkbox")
+        self.assertContains(response, "width:22px; height:22px")
+
     def test_bulk_assignment_and_rule_creation(self):
         category = Category.objects.create(name="Lebensmittel")
         tag = Tag.objects.create(name="Haushalt")
