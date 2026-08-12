@@ -1,4 +1,3 @@
-import re
 from dataclasses import dataclass
 from datetime import timedelta
 from decimal import Decimal
@@ -7,6 +6,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from .models import Document, Transaction
+from .text_normalization import comparison_words, words_match
 
 
 @dataclass(frozen=True)
@@ -17,10 +17,7 @@ class DocumentMatchCandidate:
 
 
 def _words(value):
-    return {
-        word for word in re.findall(r"[a-zäöüß0-9]+", (value or "").casefold())
-        if len(word) >= 3
-    }
+    return comparison_words(value)
 
 
 def scored_document_transaction_candidates(document):
@@ -59,9 +56,12 @@ def scored_document_transaction_candidates(document):
                 score += 10
                 reasons.append(f"Datum ±{difference} Tage")
         transaction_words = _words(f"{transaction.counterparty} {transaction.description}")
-        overlap = merchant_words & transaction_words
-        if overlap:
-            score += min(15, 5 * len(overlap))
+        overlap_count = sum(
+            1 for merchant_word in merchant_words
+            if any(words_match(merchant_word, transaction_word) for transaction_word in transaction_words)
+        )
+        if overlap_count:
+            score += min(15, 5 * overlap_count)
             reasons.append("passender Händlertext")
         candidates.append(DocumentMatchCandidate(transaction, min(score, 100), tuple(reasons)))
     return sorted(candidates, key=lambda item: (-item.confidence, -item.transaction.booking_date.toordinal()))

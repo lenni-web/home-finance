@@ -22,9 +22,18 @@ from .models import (
 from .rules import apply_categorization_rules, categorization_suggestion, normalize_merchant
 from .statement_reconciliation import store_reconciliation
 from .statement_processing import process_statement_import
+from .text_normalization import normalize_comparison_text
 
 
 class DocumentModelTests(TestCase):
+    def test_comparison_text_tolerates_umlaut_variants_and_pdf_replacement_characters(self):
+        self.assertEqual(normalize_comparison_text("Müller"), "muller")
+        self.assertEqual(normalize_comparison_text("Mueller"), "muller")
+        self.assertEqual(normalize_comparison_text("Muller"), "muller")
+        self.assertEqual(normalize_comparison_text("Straße"), "strasse")
+        self.assertEqual(normalize_comparison_text("Straße"), normalize_comparison_text("Strasse"))
+        self.assertEqual(normalize_comparison_text("M□ller"), "mller")
+
     def test_money_filter_uses_german_thousands_separator(self):
         rendered = Template(
             "{% load ledger_format %}{{ amount|money }} €"
@@ -431,6 +440,20 @@ class CategorizationWorkflowTests(TestCase):
         self.assertEqual(self.item.tags.get(), tag)
         self.assertEqual(self.item.people.get(), person)
         self.assertEqual(rule.times_applied, 1)
+
+    def test_rule_matches_umlaut_variants_and_one_pdf_character_error(self):
+        category = Category.objects.create(name="Drogerie")
+        rule = CategorizationRule.objects.create(
+            name="Müller", match_text="Müller Markt", category=category, auto_apply=True,
+        )
+        self.item.counterparty = "MUELLER MARKT"
+        self.item.save(update_fields=["counterparty", "updated_at"])
+
+        self.assertTrue(rule.matches(self.item))
+
+        self.item.counterparty = "M□LLER MARKT"
+        self.item.save(update_fields=["counterparty", "updated_at"])
+        self.assertTrue(rule.matches(self.item))
 
     def test_default_rule_application_preserves_existing_category(self):
         existing = Category.objects.create(name="Manuell")
@@ -859,6 +882,33 @@ Gesamt 12,34 EUR
 
         self.assertIsNone(auto_match_document(receipt))
         self.assertFalse(receipt.transactions.exists())
+
+    def test_document_matching_tolerates_umlaut_variants_when_dates_differ(self):
+        account = Account.objects.create(name="Umlaut")
+        statement_document = Document.objects.create(
+            kind=Document.Kind.BANK_STATEMENT, original_filename="umlaut-statement.pdf",
+            file=SimpleUploadedFile("umlaut-statement.pdf", b"%PDF-umlaut-statement", "application/pdf"),
+        )
+        statement = StatementImport.objects.create(
+            document=statement_document, account=account, status=StatementImport.Status.IMPORTED,
+        )
+        transaction = Transaction.objects.create(
+            statement_import=statement, booking_date=date(2026, 8, 6),
+            counterparty="MUELLER MARKT", amount="-23.45",
+            source_fingerprint="a" * 64, reviewed=True,
+        )
+        receipt = Document.objects.create(
+            kind=Document.Kind.RECEIPT, original_filename="umlaut-receipt.pdf",
+            file=SimpleUploadedFile("umlaut-receipt.pdf", b"%PDF-umlaut-receipt", "application/pdf"),
+            document_date=date(2026, 8, 5), merchant="Müller Markt", total_amount="23.45",
+        )
+
+        match = auto_match_document(receipt)
+
+        self.assertIsNotNone(match)
+        self.assertEqual(match.confidence, 85)
+        self.assertIn("passender Händlertext", match.reasons)
+        self.assertEqual(receipt.transactions.get(), transaction)
 
     def test_archive_searches_extracted_text(self):
         Document.objects.create(

@@ -1,10 +1,10 @@
-import re
 from dataclasses import dataclass
 
 from django.db import transaction as db_transaction
 from django.db.models import F
 
 from .models import CategorizationRule, Transaction
+from .text_normalization import normalize_comparison_text
 
 
 PAYMENT_NOISE = {
@@ -15,7 +15,7 @@ PAYMENT_NOISE = {
 
 def normalize_merchant(value):
     """Create a stable, conservative key without altering the stored bank text."""
-    words = re.findall(r"[a-z0-9äöüß]+", (value or "").casefold())
+    words = normalize_comparison_text(value).split()
     relevant = [word for word in words if word not in PAYMENT_NOISE and not word.isdigit()]
     return " ".join(relevant[:8])
 

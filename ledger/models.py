@@ -217,11 +217,11 @@ class CategorizationRule(TimestampedModel):
         ordering = ["-priority", "name"]
 
     def matches(self, transaction):
-        from .rules import normalize_merchant
+        from .text_normalization import tolerant_phrase_in_text
 
-        needle = normalize_merchant(self.match_text)
-        haystack = normalize_merchant(f"{transaction.counterparty} {transaction.description}")
-        return bool(needle) and needle in haystack
+        return tolerant_phrase_in_text(
+            self.match_text, f"{transaction.counterparty} {transaction.description}"
+        )
 
     def __str__(self):
         return self.name
