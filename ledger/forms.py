@@ -121,6 +121,19 @@ class DocumentUploadForm(forms.ModelForm):
             raise forms.ValidationError("Die Datei darf höchstens 30 MB groß sein.")
         if uploaded.content_type not in {"application/pdf", "image/jpeg", "image/png"}:
             raise forms.ValidationError("Erlaubt sind PDF-, JPEG- und PNG-Dateien.")
+        header = uploaded.read(12)
+        uploaded.seek(0)
+        detected_type = None
+        if header.startswith(b"%PDF-"):
+            detected_type = "application/pdf"
+        elif header.startswith(b"\xff\xd8\xff"):
+            detected_type = "image/jpeg"
+        elif header.startswith(b"\x89PNG\r\n\x1a\n"):
+            detected_type = "image/png"
+        if detected_type != uploaded.content_type:
+            raise forms.ValidationError(
+                "Der tatsächliche Dateiinhalt stimmt nicht mit dem angegebenen Dateityp überein."
+            )
         digest = hashlib.sha256()
         for chunk in uploaded.chunks():
             digest.update(chunk)

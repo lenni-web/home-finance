@@ -1,0 +1,11 @@
+[Unit]
+Description=Tägliches Home Finance Backup
+
+[Timer]
+OnCalendar=*-*-* 03:15:00
+Persistent=true
+RandomizedDelaySec=15m
+Unit=home-finance-backup.service
+
+[Install]
+WantedBy=timers.target

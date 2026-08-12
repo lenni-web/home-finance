@@ -50,5 +50,32 @@ git_revision="$(git -C "${project_dir}" rev-parse HEAD 2>/dev/null || printf 'un
   tar -czf "${archive}" .
 )
 chmod 600 "${archive}"
+encrypted=0
+if [[ -n "${BACKUP_GPG_RECIPIENT:-}" ]]; then
+  if ! command -v gpg >/dev/null 2>&1; then
+    printf 'BACKUP_GPG_RECIPIENT ist gesetzt, aber gpg ist nicht installiert.\n' >&2
+    exit 1
+  fi
+  encrypted_archive="${archive}.gpg"
+  if ! gpg --batch --yes --trust-model always --recipient "${BACKUP_GPG_RECIPIENT}" \
+    --output "${encrypted_archive}" --encrypt "${archive}"; then
+    rm -f "${archive}" "${encrypted_archive}"
+    printf 'Backup-Verschlüsselung fehlgeschlagen; unverschlüsseltes Archiv entfernt.\n' >&2
+    exit 1
+  fi
+  chmod 600 "${encrypted_archive}"
+  rm -f "${archive}"
+  archive="${encrypted_archive}"
+  encrypted=1
+fi
+
+archive_size="$(stat -c %s "${archive}" 2>/dev/null || stat -f %z "${archive}")"
+record_args=(python manage.py record_backup "${archive}" --size "${archive_size}" --revision "${git_revision}")
+if [[ "${encrypted}" == "1" ]]; then
+  record_args+=(--encrypted)
+fi
+"${compose[@]}" exec -T web "${record_args[@]}"
+"${project_dir}/scripts/rotate-backups.sh" "${backup_dir}"
+
 printf 'Backup erstellt: %s\n' "${archive}"
 printf 'Wichtig: Das Archiv enthält Finanzdaten und ggf. die .env-Konfiguration.\n'

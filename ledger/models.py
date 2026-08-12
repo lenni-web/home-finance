@@ -14,6 +14,31 @@ class TimestampedModel(models.Model):
         abstract = True
 
 
+class ServiceHeartbeat(models.Model):
+    """Last known activity of a long-running background component."""
+
+    name = models.CharField(max_length=50, unique=True)
+    last_seen_at = models.DateTimeField(default=timezone.now)
+    details = models.JSONField(default=dict, blank=True)
+
+    def __str__(self):
+        return self.name
+
+
+class BackupRecord(models.Model):
+    created_at = models.DateTimeField(default=timezone.now)
+    filename = models.CharField(max_length=255)
+    size_bytes = models.PositiveBigIntegerField(default=0)
+    encrypted = models.BooleanField(default=False)
+    git_revision = models.CharField(max_length=64, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.filename
+
+
 class Account(TimestampedModel):
     name = models.CharField(max_length=120)
     iban_last_four = models.CharField(max_length=4, blank=True)

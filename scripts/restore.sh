@@ -15,6 +15,7 @@ fi
 
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/home-finance-restore.XXXXXX")"
+plain_archive="${archive}"
 compose=(docker compose -f "${project_dir}/compose.yaml" -f "${project_dir}/compose.prod.yaml")
 services_stopped=0
 
@@ -34,11 +35,20 @@ cleanup() {
 }
 trap cleanup EXIT
 
-if tar -tzf "${archive}" | grep -Eq '(^/|(^|/)\.\.(/|$))'; then
+if [[ "${archive}" == *.gpg ]]; then
+  if ! command -v gpg >/dev/null 2>&1; then
+    printf 'Verschlüsseltes Backup benötigt gpg.\n' >&2
+    exit 1
+  fi
+  plain_archive="${temp_dir}/backup.tar.gz"
+  gpg --batch --output "${plain_archive}" --decrypt "${archive}"
+fi
+
+if tar -tzf "${plain_archive}" | grep -Eq '(^/|(^|/)\.\.(/|$))'; then
   printf 'Unsichere Pfade im Backup erkannt. Abbruch.\n' >&2
   exit 1
 fi
-tar -xzf "${archive}" -C "${temp_dir}"
+tar -xzf "${plain_archive}" -C "${temp_dir}"
 
 for required in database.sql documents.tar manifest.txt SHA256SUMS; do
   if [[ ! -f "${temp_dir}/${required}" ]]; then

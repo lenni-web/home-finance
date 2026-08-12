@@ -1,0 +1,14 @@
+[Unit]
+Description=Home Finance Backup
+Requires=home-finance.service
+After=home-finance.service
+
+[Service]
+Type=oneshot
+User=__SERVICE_USER__
+WorkingDirectory=__PROJECT_DIR__
+EnvironmentFile=__PROJECT_DIR__/.env
+ExecStart=__PROJECT_DIR__/scripts/backup.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

@@ -51,6 +51,39 @@ als lokale Aufgabenwarteschlange; PostgreSQL und Dokumente liegen in eigenen Vol
 Ein zusätzlicher Celery-Beat-Dienst stößt den fälligen E-Mail-Abruf einmal pro Minute an;
 das in den Einstellungen gewählte Intervall entscheidet, ob tatsächlich abgerufen wird.
 
+### Installation als Systemdienst
+
+Nach dem ersten erfolgreichen Start installiert das folgende Kommando den Compose-Stack
+als systemd-Dienst und aktiviert ein tägliches Backup um ungefähr 03:15 Uhr:
+
+```bash
+sudo ./scripts/install-production-services.sh
+```
+
+Der Dienst läuft unter dem Benutzer, der `sudo` aufgerufen hat. Dieser Benutzer muss der
+Docker-Gruppe angehören. Status und Timer lassen sich prüfen mit:
+
+```bash
+systemctl status home-finance.service
+systemctl list-timers home-finance-backup.timer
+```
+
+In der Anwendung zeigt **Einstellungen → Betriebsstatus** Datenbank, Worker, E-Mail-Abruf,
+letztes Backup, fehlgeschlagene Dokumente, Version und freien Speicherplatz.
+
+### Kontrollierte Updates
+
+Produktivupdates erstellen zuerst ein vollständiges Backup, laden Git-Tags und Commits,
+bauen sämtliche Images neu und starten Web, Worker und Scheduler gemeinsam neu:
+
+```bash
+./scripts/update-production.sh v0.1.0
+```
+
+Ohne Argument wird `origin/main` verwendet. Lokale Änderungen führen zum Abbruch. Schlägt
+der Containerstart fehl, wird der vorherige Git-Stand wieder gebaut. Im Normalbetrieb
+sollte immer ein geprüftes Release-Tag angegeben werden.
+
 ## E-Mail-Import über IMAP
 
 Unter **Einstellungen → E-Mail-Import über IMAP** lassen sich Server, Port,
@@ -92,6 +125,13 @@ verlangt deshalb eine ausdrückliche Bestätigung:
 
 Die im Backup enthaltene `environment.env` wird nicht automatisch über die aktuelle
 `.env` geschrieben. Prüfsummen werden vor jeder Wiederherstellung kontrolliert.
+
+Standardmäßig bleiben alle Sicherungen der letzten sieben Tage sowie jeweils die neueste
+Sicherung aus sechs Monaten erhalten. Die Werte lassen sich über
+`BACKUP_RETENTION_DAYS` und `BACKUP_MONTHLY_COPIES` ändern. Mit
+`BACKUP_GPG_RECIPIENT` wird das fertige Archiv für einen bereits importierten GPG-Schlüssel
+verschlüsselt. Mindestens eine zusätzliche Kopie sollte auf ein anderes Gerät übertragen
+und ein Restore vor dem Echtbetrieb einmal mit einer Testinstallation erprobt werden.
 
 ## Auswertung und Zuordnungen
 

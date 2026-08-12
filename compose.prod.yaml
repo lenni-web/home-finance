@@ -1,3 +1,9 @@
+x-log-options: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   web:
     command: >-
@@ -9,6 +15,7 @@ services:
       - documents:/app/media
       - staticfiles:/app/staticfiles
     restart: unless-stopped
+    logging: *default-logging
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/', timeout=3)"]
       interval: 30s
@@ -20,17 +27,21 @@ services:
     volumes:
       - documents:/app/media
     restart: unless-stopped
+    logging: *default-logging
 
   beat:
     volumes:
       - beat-schedule:/app/celerybeat
     restart: unless-stopped
+    logging: *default-logging
 
   db:
     restart: unless-stopped
+    logging: *default-logging
 
   redis:
     restart: unless-stopped
+    logging: *default-logging
 
 volumes:
   staticfiles:

@@ -112,6 +112,12 @@ class AccessControlTests(TestCase):
         response = self.client.get(reverse("health"))
         self.assertEqual(response.status_code, 200)
 
+    def test_operational_status_requires_login(self):
+        url = reverse("operational_status")
+        self.assertEqual(self.client.get(url).status_code, 302)
+        self.client.force_login(self.user)
+        self.assertContains(self.client.get(url), "Betriebsstatus")
+
 
 class StatementWorkflowTests(TestCase):
     def setUp(self):
@@ -783,7 +789,9 @@ Gesamt 12,34 EUR
             with override_settings(MEDIA_ROOT=Path(media_root)):
                 response = self.client.post(reverse("upload_document"), {
                     "kind": Document.Kind.RECEIPT,
-                    "file": SimpleUploadedFile("beleg.png", b"png-test", "image/png"),
+                    "file": SimpleUploadedFile(
+                        "beleg.png", b"\x89PNG\r\n\x1a\npng-test", "image/png"
+                    ),
                 })
 
         document = Document.objects.get()
