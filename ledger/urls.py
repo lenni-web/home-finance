@@ -22,6 +22,7 @@ urlpatterns = [
         name="toggle_classification",
     ),
     path("settings/classification/rules/<int:pk>/edit/", views.edit_rule, name="edit_rule"),
+    path("settings/classification/rules/<int:pk>/delete/", views.delete_rule, name="delete_rule"),
     path(
         "settings/classification/<str:kind>/<int:pk>/edit/",
         views.edit_classification,

@@ -533,6 +533,33 @@ class CategorizationWorkflowTests(TestCase):
         self.assertRedirects(response, reverse("manage_classification"))
         self.assertEqual(low.priority, 300)
 
+    def test_rule_can_be_deleted_without_changing_existing_transaction_assignment(self):
+        category = Category.objects.create(name="Bleibt zugeordnet")
+        self.item.category = category
+        self.item.save(update_fields=["category", "updated_at"])
+        rule = CategorizationRule.objects.create(
+            name="Nicht mehr benötigt",
+            match_text="Nicht mehr benötigt",
+            category=category,
+        )
+
+        response = self.client.post(reverse("delete_rule", args=[rule.pk]))
+
+        self.assertRedirects(response, reverse("manage_classification"))
+        self.assertFalse(CategorizationRule.objects.filter(pk=rule.pk).exists())
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.category, category)
+
+    def test_rule_cannot_be_deleted_via_get(self):
+        rule = CategorizationRule.objects.create(
+            name="Geschützt", match_text="Geschützt"
+        )
+
+        response = self.client.get(reverse("delete_rule", args=[rule.pk]))
+
+        self.assertEqual(response.status_code, 405)
+        self.assertTrue(CategorizationRule.objects.filter(pk=rule.pk).exists())
+
     def test_category_can_be_created_and_deactivated(self):
         response = self.client.post(reverse("manage_classification"), {
             "kind": "category",

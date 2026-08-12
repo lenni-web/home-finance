@@ -10,6 +10,7 @@ from django.db.models.functions import Coalesce
 from django.db.models.functions import TruncMonth
 from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_POST
 
 from .forms import (
     AccountForm, BulkCategorizationForm, CategorizationRuleForm, CategoryForm,
@@ -434,6 +435,16 @@ def edit_rule(request, pk):
         messages.success(request, f"Regel „{rule.name}“ wurde aktualisiert.")
         return redirect("manage_classification")
     return render(request, "ledger/edit_rule.html", {"form": form, "rule": rule})
+
+
+@login_required
+@require_POST
+def delete_rule(request, pk):
+    rule = get_object_or_404(CategorizationRule, pk=pk)
+    rule_name = rule.name
+    rule.delete()
+    messages.success(request, f"Regel „{rule_name}“ wurde gelöscht.")
+    return redirect("manage_classification")
 
 
 @login_required
