@@ -99,9 +99,9 @@ def dashboard(request):
 
     task_counts = _open_task_counts()
     return render(request, "ledger/dashboard.html", {
-        "documents": Document.objects.select_related("category").prefetch_related("tags", "people")[:20],
+        "documents": Document.objects.select_related("category").prefetch_related("tags", "people")[:5],
         "transactions": Transaction.objects.select_related("category")[:10],
-        "statement_imports": StatementImport.objects.select_related("document", "account")[:10],
+        "statement_imports": StatementImport.objects.select_related("document", "account")[:5],
         "months": months,
         "upload_form": DocumentUploadForm(),
         "selected_month": month_start.strftime("%Y-%m"),

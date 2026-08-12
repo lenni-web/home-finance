@@ -44,12 +44,13 @@
     .tag { background:#ccfbf1; color:#115e59; } .status { background:#f1f5f9; color:#475569; }
     .status.good { background:#dcfce7; color:#166534; } .status.warn { background:#fef3c7; color:#92400e; }
     .muted { color:#64748b; } .empty { padding:1.4rem; text-align:center; color:#64748b; }
-    @media(max-width:1100px){header{display:block}.dashboard-brand{margin-bottom:.35rem}}
+    @media(max-width:1100px){.dashboard-brand{margin-bottom:.35rem}}
+    @media(max-width:800px){.dashboard-brand{flex:1 1 0}}
     @media(max-width:850px){body{padding:1rem}.top-grid,.analytics-grid{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,1fr)}.section-head{align-items:center}}
   </style>
 </head>
 <body>
-  <header><div class="dashboard-brand"><div class="eyebrow">Home Finance</div><h1>Finanzen im Blick</h1></div>{% include "ledger/_navigation.html" %}</header>
+  <header class="app-page-header"><div class="app-page-heading dashboard-brand"><h1>Finanzen im Blick</h1></div>{% include "ledger/_navigation.html" %}</header>
   {% for message in messages %}<div class="card message">{{ message }}</div>{% endfor %}
   <div class="section-head"><div><h2>Monatsauswertung</h2><span class="muted">{{ selected_month_date|date:"F Y" }}</span></div><form class="month-form" method="get"><label>Monat<input type="month" name="month" value="{{ selected_month }}"></label><button>Anzeigen</button></form></div>
   <section class="metrics">
@@ -73,7 +74,7 @@
   <section class="card table-wrap"><table><thead><tr><th>Datum</th><th>Dokument</th><th>Kategorie</th><th>Tags</th><th>Status</th></tr></thead><tbody>
     {% for document in documents %}<tr><td>{{ document.document_date|date:"d.m.Y"|default:"–" }}</td><td><a href="{% url 'document_review' document.pk %}">{{ document }}</a><div class="muted">{{ document.get_kind_display }}</div></td><td>{{ document.category|default:"–" }}</td><td>{% for tag in document.tags.all %}<span class="tag">{{ tag }}</span> {% empty %}–{% endfor %}</td><td><span class="status">{{ document.get_processing_status_display }}</span></td></tr>{% empty %}<tr><td colspan="5" class="empty">Noch keine Dokumente vorhanden.</td></tr>{% endfor %}
   </tbody></table></section>
-  <div class="section-head"><div><h2>Kontoauszüge</h2><span class="muted">Importstatus und rechnerische Saldo-Prüfung</span></div></div>
+  <div class="section-head"><div><h2>Kontoauszüge</h2><span class="muted">Importstatus und rechnerische Saldo-Prüfung</span></div><a href="{% url 'document_archive' %}?kind=bank_statement">Alle anzeigen →</a></div>
   <section class="card table-wrap"><table><thead><tr><th>Konto</th><th>Dokument</th><th>Verarbeitung</th><th>Saldo-Prüfung</th><th>Buchungen</th><th></th></tr></thead><tbody>
     {% for statement in statement_imports %}<tr><td><strong>{{ statement.account }}</strong></td><td>{{ statement.document }}</td><td><span class="status">{{ statement.get_status_display }}</span></td><td>{% if statement.reconciliation_status == "balanced" %}<span class="status good">✓ {{ statement.get_reconciliation_status_display }}</span>{% elif statement.reconciliation_status == "mismatch" %}<span class="status warn">⚠ {{ statement.get_reconciliation_status_display }} · {{ statement.reconciliation_difference|money }} €</span>{% else %}<span class="status">{{ statement.get_reconciliation_status_display }}</span>{% endif %}</td><td>{{ statement.transactions.count }}</td><td>{% if statement.status == "review" %}<a class="button-link" href="{% url 'statement_review' statement.pk %}">Jetzt prüfen</a>{% endif %}</td></tr>{% empty %}<tr><td colspan="6" class="empty">Noch keine Kontoauszüge vorhanden.</td></tr>{% endfor %}
   </tbody></table></section>

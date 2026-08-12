@@ -33,7 +33,7 @@
   </style>
 </head>
 <body>
-  <header><div><h1>Buchungsübersicht</h1><p>{{ transaction_count }} Buchungen, davon {{ uncategorized_count }} ohne Kategorie</p></div>{% include "ledger/_navigation.html" %}</header>
+  <header class="app-page-header"><div class="app-page-heading"><h1>Buchungen</h1><p>{{ transaction_count }} Buchungen, davon {{ uncategorized_count }} ohne Kategorie</p></div>{% include "ledger/_navigation.html" %}</header>
   {% for message in messages %}<div class="card messages">{{ message }}</div>{% endfor %}
   <section class="summary">
     <div class="card metric">Einnahmen<strong class="positive">{{ totals.income|money }} €</strong></div>

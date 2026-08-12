@@ -20,7 +20,7 @@
   </style>
 </head>
 <body>
-  <header><div><h1>Dokumentenarchiv</h1><p>Belege, Rechnungen und Kontoauszüge nach Monat.</p></div>{% include "ledger/_navigation.html" %}</header>
+  <header class="app-page-header"><div class="app-page-heading"><h1>Dokumentenarchiv</h1><p>Belege, Rechnungen und Kontoauszüge nach Monat.</p></div>{% include "ledger/_navigation.html" %}</header>
   {% for message in messages %}<div class="card">{{ message }}</div>{% endfor %}
   <section class="card"><form method="get"><div class="filters">{{ filters.as_p }}</div><p><button>Filtern</button> <a class="button-link secondary" href="{% url 'document_archive' %}">Zurücksetzen</a></p></form></section>
   {% regroup documents by archive_month as month_groups %}

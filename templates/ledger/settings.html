@@ -30,7 +30,7 @@
   </style>
 </head>
 <body>
-  <header><div><h1>Einstellungen</h1><p>Konten und grundlegende Stammdaten verwalten.</p></div>{% include "ledger/_navigation.html" %}</header>
+  <header class="app-page-header"><div class="app-page-heading"><h1>Einstellungen</h1><p>Konten, E-Mail-Import und Systemzugang verwalten.</p></div>{% include "ledger/_navigation.html" %}</header>
   {% for message in messages %}<div class="card message">{{ message }}</div>{% endfor %}
   <p><a class="button-link" href="{% url 'operational_status' %}">Betriebsstatus öffnen</a></p>
   <div class="grid">

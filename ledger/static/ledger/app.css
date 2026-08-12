@@ -6,6 +6,25 @@
 * { box-sizing:border-box; }
 body { margin:auto; padding:1.5rem; background:var(--hf-bg); color:var(--hf-text); }
 header { gap:1.25rem; }
+.main-nav { display:flex; align-items:center; justify-content:flex-end; gap:.65rem; flex:1 1 auto; min-width:0; }
+.desktop-nav { display:flex; align-items:center; gap:.25rem; }
+.desktop-nav>a,.desktop-nav button,.nav-menu>summary,.mobile-nav>summary { display:inline-flex; align-items:center; min-height:38px; padding:.5rem .7rem; border:0; border-radius:9px; background:transparent; color:#475569; font:inherit; font-size:.9rem; font-weight:700; text-decoration:none; white-space:nowrap; cursor:pointer; list-style:none; }
+.desktop-nav>a:hover,.desktop-nav button:hover,.nav-menu>summary:hover,.mobile-nav>summary:hover { background:#e2e8f0; color:#0f172a; }
+.desktop-nav .active,.nav-menu>summary.active { background:#ccfbf1; color:#115e59; }
+.desktop-nav form { margin:0; }
+.desktop-nav .logout { margin-left:.2rem; padding-left:.35rem; border-left:1px solid #cbd5e1; }
+.nav-menu,.mobile-nav { position:relative; }
+.nav-menu>summary::-webkit-details-marker,.mobile-nav>summary::-webkit-details-marker { display:none; }
+.nav-menu-panel,.mobile-nav-panel { position:absolute; z-index:20; top:calc(100% + .45rem); right:0; min-width:235px; padding:.45rem; border:1px solid var(--hf-border); border-radius:12px; background:#fff; box-shadow:0 16px 40px rgba(15,23,42,.16); }
+.nav-menu-panel a,.mobile-nav-panel a,.mobile-nav-panel button { display:block; width:100%; padding:.65rem .75rem; border:0; border-radius:8px; background:transparent; color:#334155; font:inherit; font-weight:650; text-align:left; text-decoration:none; }
+.nav-count { float:right; min-width:1.55rem; margin-left:.65rem; padding:.08rem .42rem; border-radius:999px; background:#fef3c7; color:#92400e; font-size:.75rem; text-align:center; }
+.nav-menu-panel a:hover,.mobile-nav-panel a:hover,.mobile-nav-panel button:hover { background:#f1f5f9; }
+.mobile-nav { display:none; }
+.mobile-nav-label { display:block; padding:.7rem .75rem .25rem; color:#0f766e; font-size:.72rem; font-weight:800; letter-spacing:.07em; text-transform:uppercase; }
+.app-page-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.75rem 1.25rem; margin-bottom:1rem; }
+.app-page-heading { flex:0 1 auto; min-width:180px; min-height:40px; padding-left:48px; background:url("brand/home-finance-logo.png") left center/38px 38px no-repeat; }
+.app-page-heading h1 { margin:0; font-size:1.65rem; line-height:1.15; letter-spacing:-.035em; }
+.app-page-heading p { margin:.25rem 0 0; color:var(--hf-muted); }
 .card { background:var(--hf-card); border:1px solid var(--hf-border); border-radius:16px; box-shadow:0 5px 20px rgba(15,23,42,.04); }
 button,.button-link { transition:filter .15s ease,transform .15s ease; }
 button:hover,.button-link:hover { filter:brightness(.94); }
@@ -13,4 +32,5 @@ button:focus-visible,.button-link:focus-visible,a:focus-visible,input:focus-visi
 input,select,textarea { border:1px solid #cbd5e1; border-radius:8px; background:white; font:inherit; }
 table { font-variant-numeric:tabular-nums; }
 .message,.messages { border-left:4px solid var(--hf-primary); }
-@media(max-width:800px) { body { padding:1rem; } }
+@media(max-width:1050px) { .desktop-nav { display:none; } .mobile-nav { display:block; } }
+@media(max-width:800px) { body { padding:1rem; } .app-page-header { align-items:center; } .main-nav { width:auto; margin-left:auto; flex:0 0 auto; } .app-page-heading { min-width:0; max-width:calc(100% - 88px); flex:1 1 0; } .app-page-heading h1 { font-size:1.45rem; } }

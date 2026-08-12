@@ -24,7 +24,7 @@
   </style>
 </head>
 <body>
-  <header><div><h1>Kontoauszug prüfen</h1><p>{{ statement.account }} · {{ transaction_count }} Buchungen · Status: {{ statement.get_status_display }}</p></div>{% include "ledger/_navigation.html" %}</header>
+  <header class="app-page-header"><div class="app-page-heading"><h1>Kontoauszug prüfen</h1><p>{{ statement.account }} · {{ transaction_count }} Buchungen · Status: {{ statement.get_status_display }}</p></div>{% include "ledger/_navigation.html" %}</header>
   {% for message in messages %}<div class="card">{{ message }}</div>{% endfor %}
   <section class="card"><h2>Saldo-Prüfung: {{ statement.get_reconciliation_status_display }}</h2>{% if statement.reconciliation_status != "unavailable" %}<p>Anfangssaldo: {{ statement.opening_balance|money }} € · Summe der Buchungen: {{ statement.transaction_total|money }} € · Endsaldo: {{ statement.closing_balance|money }} €</p><p>{% if statement.reconciliation_status == "balanced" %}✓ Der Kontoauszug ist rechnerisch ausgeglichen.{% else %}⚠ Abweichung: {{ statement.reconciliation_difference|money }} €. Bitte Buchungen vor der Bestätigung prüfen.{% endif %}</p>{% else %}<p>Anfangs- oder Endsaldo konnte nicht sicher erkannt werden.</p>{% endif %}</section>
   <form method="post">{% csrf_token %}{{ formset.management_form }}{{ formset.non_form_errors }}

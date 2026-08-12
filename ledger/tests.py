@@ -112,6 +112,11 @@ class AccessControlTests(TestCase):
         response = self.client.get(reverse("health"))
         self.assertEqual(response.status_code, 200)
 
+    def test_favicon_redirects_to_brand_asset(self):
+        response = self.client.get("/favicon.ico")
+        self.assertEqual(response.status_code, 301)
+        self.assertEqual(response["Location"], "/static/ledger/brand/favicon.ico")
+
     def test_operational_status_requires_login(self):
         url = reverse("operational_status")
         self.assertEqual(self.client.get(url).status_code, 302)
@@ -531,7 +536,7 @@ class CategorizationWorkflowTests(TestCase):
     def test_dashboard_contains_monthly_analysis_and_open_tasks(self):
         response = self.client.get(reverse("dashboard"), {"month": "2026-07"})
 
-        self.assertContains(response, 'class="dashboard-brand"')
+        self.assertContains(response, "dashboard-brand")
         self.assertNotContains(
             response, "Dokumente erfassen, Buchungen prüfen und Ausgaben zuordnen."
         )
@@ -705,7 +710,7 @@ class CategorizationWorkflowTests(TestCase):
         self.assertContains(response, "Zweite Regel")
         self.assertNotContains(response, "Erste Regel")
         self.assertContains(response, "1 von 2")
-        self.assertContains(response, 'class="page-title"')
+        self.assertContains(response, "page-title")
         self.assertNotContains(
             response, "Zuordnungen zentral verwalten und Automatisierung nachvollziehbar halten."
         )
