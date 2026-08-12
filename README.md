@@ -41,6 +41,14 @@ docker compose -f compose.yaml -f compose.prod.yaml exec web \
   python manage.py createsuperuser
 ```
 
+`DJANGO_ALLOWED_HOSTS` muss neben der lokalen Server-IP auch `localhost` und
+`127.0.0.1` enthalten. Die Loopback-Adresse wird vom internen Docker-Healthcheck
+verwendet, zum Beispiel:
+
+```env
+DJANGO_ALLOWED_HOSTS=192.168.1.10,localhost,127.0.0.1
+```
+
 Die Anwendung läuft über Gunicorn auf `http://SERVER-IP:8000`. Ohne HTTPS darf sie nur
 in einem vertrauenswürdigen lokalen Netz oder über ein VPN erreichbar sein. Sie sollte
 nicht direkt ins Internet freigegeben werden. `DJANGO_SECURE_COOKIES` bleibt ohne HTTPS
