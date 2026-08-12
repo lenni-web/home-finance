@@ -38,8 +38,8 @@
     </section>
     <section class="card table-wrap">
       <h2>Vorhandene Konten</h2>
-      <table><thead><tr><th>Name</th><th>IBAN-Kennung</th><th>Kontoauszüge</th></tr></thead><tbody>
-        {% for account in accounts %}<tr><td><strong>{{ account.name }}</strong></td><td class="iban">{% if account.iban_last_four %}•••• {{ account.iban_last_four }}{% else %}–{% endif %}</td><td>{{ account.statement_count }}</td></tr>{% empty %}<tr><td colspan="3" class="empty">Noch kein Konto angelegt.</td></tr>{% endfor %}
+      <table><thead><tr><th>Name</th><th>IBAN-Kennung</th><th>Kontoauszüge</th><th></th></tr></thead><tbody>
+        {% for account in accounts %}<tr><td><strong>{{ account.name }}</strong></td><td class="iban">{% if account.iban_last_four %}•••• {{ account.iban_last_four }}{% else %}–{% endif %}</td><td>{{ account.statement_count }}</td><td><a href="{% url 'edit_account' account.pk %}">Bearbeiten</a></td></tr>{% empty %}<tr><td colspan="4" class="empty">Noch kein Konto angelegt.</td></tr>{% endfor %}
       </tbody></table>
     </section>
   </div>

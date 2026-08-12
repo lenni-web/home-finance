@@ -7,6 +7,7 @@ urlpatterns = [
     path("settings/", views.settings, name="settings"),
     path("settings/email/", views.save_email_settings, name="save_email_settings"),
     path("settings/accounts/add/", views.add_account, name="add_account"),
+    path("settings/accounts/<int:pk>/edit/", views.edit_account, name="edit_account"),
     path("documents/upload/", views.upload_document, name="upload_document"),
     path("documents/", views.document_archive, name="document_archive"),
     path("documents/<int:pk>/review/", views.document_review, name="document_review"),

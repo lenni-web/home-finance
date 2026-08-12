@@ -196,6 +196,17 @@ def add_account(request):
 
 
 @login_required
+def edit_account(request, pk):
+    account = get_object_or_404(Account, pk=pk)
+    form = AccountForm(request.POST or None, instance=account)
+    if request.method == "POST" and form.is_valid():
+        updated = form.save()
+        messages.success(request, f"Konto „{updated.name}“ wurde aktualisiert.")
+        return redirect("settings")
+    return render(request, "ledger/edit_account.html", {"form": form, "account": account})
+
+
+@login_required
 def upload_document(request):
     if request.method != "POST":
         return redirect("dashboard")

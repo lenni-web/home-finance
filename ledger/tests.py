@@ -100,6 +100,26 @@ class StatementWorkflowTests(TestCase):
         self.assertRedirects(response, reverse("settings"))
         self.assertFalse(Account.objects.filter(name="Fehlerhaft").exists())
 
+    def test_account_can_be_edited_without_losing_statement_assignment(self):
+        document = Document.objects.create(
+            kind=Document.Kind.BANK_STATEMENT,
+            original_filename="account-edit.pdf",
+            file=SimpleUploadedFile("account-edit.pdf", b"%PDF-account-edit", "application/pdf"),
+        )
+        statement = StatementImport.objects.create(document=document, account=self.account)
+
+        response = self.client.post(reverse("edit_account", args=[self.account.pk]), {
+            "name": "Gemeinschaftskonto",
+            "iban_last_four": "9876",
+        })
+
+        self.account.refresh_from_db()
+        statement.refresh_from_db()
+        self.assertRedirects(response, reverse("settings"))
+        self.assertEqual(self.account.name, "Gemeinschaftskonto")
+        self.assertEqual(self.account.iban_last_four, "9876")
+        self.assertEqual(statement.account, self.account)
+
     def test_statement_review_field_limit_supports_large_statements(self):
         fields_per_transaction = 8
         expected_large_statement = 500
