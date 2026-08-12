@@ -9,6 +9,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
+from django.template import Context, Template
 from django.urls import reverse
 
 from .document_processing import _parse_date, _parse_merchant, _parse_total
@@ -24,6 +25,13 @@ from .statement_processing import process_statement_import
 
 
 class DocumentModelTests(TestCase):
+    def test_money_filter_uses_german_thousands_separator(self):
+        rendered = Template(
+            "{% load ledger_format %}{{ amount|money }} €"
+        ).render(Context({"amount": Decimal("4000.00")}))
+
+        self.assertEqual(rendered, "4.000,00 €")
+
     def test_document_hash_and_relations(self):
         with tempfile.TemporaryDirectory() as media_root:
             with override_settings(MEDIA_ROOT=Path(media_root)):
@@ -719,7 +727,7 @@ class EmailImportTests(TestCase):
         self.assertFalse(receipt.transactions.exists())
         response = self.client.get(reverse("document_review", args=[receipt.pk]))
         self.assertContains(response, "Musterladen")
-        self.assertContains(response, str(transaction.amount))
+        self.assertContains(response, "-12,34 €")
 
 
 class StatementReconciliationTests(TestCase):

@@ -4,6 +4,7 @@ from django import forms
 from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
 from django.forms import modelformset_factory
+from django.utils.formats import number_format
 
 from .models import (
     Account, CategorizationRule, Category, Document, EmailImportConfig, Person, Tag, Transaction,
@@ -181,7 +182,8 @@ class DocumentTransactionLinkForm(forms.Form):
 
     @staticmethod
     def transaction_label(item):
-        return f"{item.booking_date:%d.%m.%Y} · {item.counterparty} · {item.amount:.2f} €"
+        amount = number_format(item.amount, decimal_pos=2, use_l10n=True, force_grouping=True)
+        return f"{item.booking_date:%d.%m.%Y} · {item.counterparty} · {amount} €"
 
 
 class DocumentArchiveFilterForm(forms.Form):

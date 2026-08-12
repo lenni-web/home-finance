@@ -1,4 +1,4 @@
-<!doctype html>
+{% load ledger_format %}<!doctype html>
 <html lang="de">
 <head>
   <meta charset="utf-8">
@@ -23,6 +23,6 @@
   <section class="card"><form method="get"><div class="filters">{{ filters.as_p }}</div><p><button>Filtern</button> <a href="{% url 'document_archive' %}">Zurücksetzen</a></p></form></section>
   {% regroup documents by archive_month as month_groups %}
   {% for group in month_groups %}<section class="card table-wrap"><h2>{{ group.grouper }}</h2><table><thead><tr><th>Datum</th><th>Dokument</th><th>Händler</th><th>Betrag</th><th>Zuordnung</th><th></th></tr></thead><tbody>
-    {% for document in group.list %}<tr><td>{{ document.document_date|date:"d.m.Y"|default:"–" }}</td><td><a href="{% url 'document_review' document.pk %}">{{ document }}</a><div class="status">{{ document.get_kind_display }} · {{ document.get_processing_status_display }}</div></td><td>{{ document.merchant|default:"–" }}</td><td>{% if document.total_amount != None %}{{ document.total_amount|floatformat:2 }} €{% else %}–{% endif %}</td><td>{{ document.category|default:"–" }}{% for tag in document.tags.all %} <span class="tag">{{ tag }}</span>{% endfor %}{% for person in document.people.all %} · {{ person }}{% endfor %}{% if document.transactions.count %}<div class="status">{{ document.transactions.count }} Kontobewegung(en)</div>{% endif %}</td><td><a href="{% url 'document_download' document.pk %}?download=1">Download</a></td></tr>{% endfor %}
+    {% for document in group.list %}<tr><td>{{ document.document_date|date:"d.m.Y"|default:"–" }}</td><td><a href="{% url 'document_review' document.pk %}">{{ document }}</a><div class="status">{{ document.get_kind_display }} · {{ document.get_processing_status_display }}</div></td><td>{{ document.merchant|default:"–" }}</td><td>{% if document.total_amount != None %}{{ document.total_amount|money }} €{% else %}–{% endif %}</td><td>{{ document.category|default:"–" }}{% for tag in document.tags.all %} <span class="tag">{{ tag }}</span>{% endfor %}{% for person in document.people.all %} · {{ person }}{% endfor %}{% if document.transactions.count %}<div class="status">{{ document.transactions.count }} Kontobewegung(en)</div>{% endif %}</td><td><a href="{% url 'document_download' document.pk %}?download=1">Download</a></td></tr>{% endfor %}
   </tbody></table></section>{% empty %}<section class="card">Keine Dokumente gefunden.</section>{% endfor %}
 </body></html>

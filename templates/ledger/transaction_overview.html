@@ -1,4 +1,4 @@
-<!doctype html>
+{% load ledger_format %}<!doctype html>
 <html lang="de">
 <head>
   <meta charset="utf-8">
@@ -34,9 +34,9 @@
   <header><div><h1>Buchungsübersicht</h1><p>{{ transaction_count }} Buchungen, davon {{ uncategorized_count }} ohne Kategorie</p></div>{% include "ledger/_navigation.html" %}</header>
   {% for message in messages %}<div class="card messages">{{ message }}</div>{% endfor %}
   <section class="summary">
-    <div class="card metric">Einnahmen<strong class="positive">{{ totals.income|floatformat:2 }} €</strong></div>
-    <div class="card metric">Ausgaben<strong class="negative">{{ totals.expenses|floatformat:2 }} €</strong></div>
-    <div class="card metric">Differenz<strong>{{ totals.balance|floatformat:2 }} €</strong></div>
+    <div class="card metric">Einnahmen<strong class="positive">{{ totals.income|money }} €</strong></div>
+    <div class="card metric">Ausgaben<strong class="negative">{{ totals.expenses|money }} €</strong></div>
+    <div class="card metric">Differenz<strong>{{ totals.balance|money }} €</strong></div>
   </section>
   <section class="card"><form method="get"><div class="filters">{{ filters.as_p }}</div><p><button>Filter anwenden</button> <a href="{% url 'transaction_overview' %}">Zurücksetzen</a></p></form></section>
   <form method="post">{% csrf_token %}{{ formset.management_form }}{{ formset.non_form_errors }}
@@ -47,7 +47,7 @@
         <td>{{ form.instance.booking_date|date:"d.m.Y" }}<div class="muted">Valuta {{ form.instance.value_date|date:"d.m.Y" }}</div></td>
         <td>{{ form.instance.statement_import.account }}</td>
         <td><strong>{{ form.instance.counterparty|default:form.instance.booking_type }}</strong><div class="muted">{{ form.instance.description|linebreaksbr|truncatechars:220 }}</div>{% if form.instance.rule_suggestion %}<span class="suggestion">Vorschlag: {{ form.instance.rule_suggestion.category|default:"Zuordnung" }} · {{ form.instance.rule_suggestion.confidence }} % sicher · {{ form.instance.rule_suggestion.source }}</span>{% endif %}</td>
-        <td class="number {% if form.instance.amount < 0 %}negative{% else %}positive{% endif %}">{{ form.instance.amount|floatformat:2 }} €</td>
+        <td class="number {% if form.instance.amount < 0 %}negative{% else %}positive{% endif %}">{{ form.instance.amount|money }} €</td>
         <td>{{ form.category.errors }}{{ form.category }}</td>
         <td>{{ form.tags.errors }}{{ form.tags }}</td>
         <td>{{ form.people.errors }}{{ form.people }}</td>
