@@ -17,6 +17,7 @@
     input,select,textarea { width:100%; padding:.7rem .75rem; border:1px solid #cbd5e1; border-radius:9px; font:inherit; }
     input[type=checkbox] { width:auto; margin-right:.35rem; }
     button.primary { margin-top:1rem; padding:.72rem 1rem; border:0; border-radius:9px; background:#0f766e; color:white; font-weight:700; cursor:pointer; }
+    .button-link { display:inline-block; padding:.55rem .8rem; border-radius:8px; background:#0f766e; color:white; font-weight:700; text-decoration:none; white-space:nowrap; }
     table { width:100%; border-collapse:collapse; } th,td { padding:.8rem .5rem; border-bottom:1px solid #e2e8f0; text-align:left; }
     th { color:#64748b; font-size:.78rem; text-transform:uppercase; letter-spacing:.04em; }
     .iban { font-family:ui-monospace,monospace; color:#64748b; }
@@ -39,7 +40,7 @@
     <section class="card table-wrap">
       <h2>Vorhandene Konten</h2>
       <table><thead><tr><th>Name</th><th>IBAN-Kennung</th><th>Kontoauszüge</th><th></th></tr></thead><tbody>
-        {% for account in accounts %}<tr><td><strong>{{ account.name }}</strong></td><td class="iban">{% if account.iban_last_four %}•••• {{ account.iban_last_four }}{% else %}–{% endif %}</td><td>{{ account.statement_count }}</td><td><a href="{% url 'edit_account' account.pk %}">Bearbeiten</a></td></tr>{% empty %}<tr><td colspan="4" class="empty">Noch kein Konto angelegt.</td></tr>{% endfor %}
+        {% for account in accounts %}<tr><td><strong>{{ account.name }}</strong></td><td class="iban">{% if account.iban_last_four %}•••• {{ account.iban_last_four }}{% else %}–{% endif %}</td><td>{{ account.statement_count }}</td><td><a class="button-link" href="{% url 'edit_account' account.pk %}">Bearbeiten</a></td></tr>{% empty %}<tr><td colspan="4" class="empty">Noch kein Konto angelegt.</td></tr>{% endfor %}
       </tbody></table>
     </section>
   </div>
