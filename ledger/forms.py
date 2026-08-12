@@ -224,4 +224,7 @@ class PersonForm(forms.ModelForm):
 class CategorizationRuleForm(forms.ModelForm):
     class Meta:
         model = CategorizationRule
-        fields = ["name", "match_text", "category", "tags", "people", "auto_apply"]
+        fields = [
+            "name", "match_text", "priority", "category", "tags", "people", "auto_apply"
+        ]
+        labels = {"priority": "Priorität (höher wird zuerst geprüft)"}

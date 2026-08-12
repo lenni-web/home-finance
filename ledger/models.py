@@ -198,13 +198,20 @@ class CategorizationRule(TimestampedModel):
     auto_apply = models.BooleanField(default=True)
     active = models.BooleanField(default=True)
     times_applied = models.PositiveIntegerField(default=0)
+    priority = models.PositiveIntegerField(
+        default=100,
+        help_text="Höhere Werte werden zuerst ausgewertet.",
+    )
 
     class Meta:
-        ordering = ["name"]
+        ordering = ["-priority", "name"]
 
     def matches(self, transaction):
-        haystack = f"{transaction.counterparty}\n{transaction.description}".casefold()
-        return self.match_text.casefold() in haystack
+        from .rules import normalize_merchant
+
+        needle = normalize_merchant(self.match_text)
+        haystack = normalize_merchant(f"{transaction.counterparty} {transaction.description}")
+        return bool(needle) and needle in haystack
 
     def __str__(self):
         return self.name

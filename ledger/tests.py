@@ -16,7 +16,7 @@ from .importers import ParsedStatement, ParsedTransaction
 from .models import (
     Account, CategorizationRule, Category, Document, Person, StatementImport, Tag, Transaction,
 )
-from .rules import apply_categorization_rules
+from .rules import apply_categorization_rules, categorization_suggestion, normalize_merchant
 from .statement_reconciliation import store_reconciliation
 from .statement_processing import process_statement_import
 
@@ -334,9 +334,69 @@ class CategorizationWorkflowTests(TestCase):
 
         response = self.client.get(reverse("transaction_overview"))
 
-        self.assertContains(response, "Regelvorschlag: Vorschlag")
+        self.assertContains(response, "Vorschlag: Vorschlag")
+        self.assertContains(response, "% sicher · Regel")
         self.item.refresh_from_db()
         self.assertIsNone(self.item.category)
+
+    def test_dashboard_contains_monthly_analysis_and_open_tasks(self):
+        response = self.client.get(reverse("dashboard"), {"month": "2026-07"})
+
+        self.assertContains(response, "Monatsauswertung")
+        self.assertContains(response, "42,50 €")
+        self.assertContains(response, "Ohne Kategorie")
+        self.assertContains(response, "Offene Aufgaben")
+
+    def test_open_tasks_lists_uncategorized_transactions(self):
+        response = self.client.get(reverse("open_tasks"))
+
+        self.assertContains(response, "Beispielmarkt Berlin")
+        self.assertContains(response, "Buchungen ohne Kategorie")
+
+    def test_learns_suggestion_from_confirmed_normalized_merchant(self):
+        category = Category.objects.create(name="Lebensmittel")
+        self.item.category = category
+        self.item.save(update_fields=["category", "updated_at"])
+        candidate = Transaction.objects.create(
+            statement_import=self.statement,
+            booking_date=date(2026, 8, 2),
+            counterparty="BEISPIELMARKT BERLIN GMBH",
+            amount="-12.00",
+            source_fingerprint="9" * 64,
+            reviewed=True,
+        )
+
+        suggestion = categorization_suggestion(candidate)
+
+        self.assertEqual(normalize_merchant(candidate.counterparty), "beispielmarkt berlin")
+        self.assertEqual(suggestion.category, category)
+        self.assertEqual(suggestion.confidence, 100)
+        self.assertEqual(suggestion.source, "Bestätigte Buchungen")
+
+    def test_higher_priority_rule_wins_and_can_be_edited(self):
+        low = CategorizationRule.objects.create(
+            name="Niedrig", match_text="Beispielmarkt", priority=10, auto_apply=False
+        )
+        high_category = Category.objects.create(name="Priorisiert")
+        high = CategorizationRule.objects.create(
+            name="Hoch", match_text="Beispielmarkt Berlin", category=high_category,
+            priority=200, auto_apply=False,
+        )
+
+        suggestion = categorization_suggestion(self.item)
+        self.assertEqual(suggestion.rule, high)
+
+        response = self.client.post(reverse("edit_rule", args=[low.pk]), {
+            "name": "Nun hoch",
+            "match_text": "Beispielmarkt",
+            "priority": "300",
+            "category": "",
+            "tags": [],
+            "people": [],
+        })
+        low.refresh_from_db()
+        self.assertRedirects(response, reverse("manage_classification"))
+        self.assertEqual(low.priority, 300)
 
     def test_category_can_be_created_and_deactivated(self):
         response = self.client.post(reverse("manage_classification"), {

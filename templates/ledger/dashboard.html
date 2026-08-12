@@ -13,6 +13,16 @@
     .card { background:white; border:1px solid #dbe3ec; border-radius:16px; padding:1.2rem; box-shadow:0 5px 20px rgba(15,23,42,.04); }
     .message { margin:1rem 0; border-left:4px solid #0f766e; }
     .top-grid { display:grid; grid-template-columns:minmax(360px,1.25fr) minmax(260px,.75fr); gap:1rem; margin:1.25rem 0; }
+    .metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.8rem; margin:1.25rem 0; }
+    .metric strong { display:block; margin-top:.35rem; font-size:1.55rem; font-variant-numeric:tabular-nums; }
+    .positive { color:#047857; } .negative { color:#b91c1c; }
+    .analytics-grid { display:grid; grid-template-columns:1.35fr .65fr; gap:1rem; margin:1rem 0 1.5rem; }
+    .category-row { display:grid; grid-template-columns:minmax(120px,1fr) 2fr 90px; gap:.7rem; align-items:center; margin:.7rem 0; }
+    .bar { height:9px; overflow:hidden; border-radius:99px; background:#e2e8f0; } .bar i { display:block; height:100%; border-radius:99px; }
+    .amount { text-align:right; font-variant-numeric:tabular-nums; }
+    .month-form { display:flex; align-items:end; gap:.5rem; } .month-form label { margin:0; }
+    .month-form input { width:auto; } .month-form button { padding:.68rem .8rem; border:0; border-radius:9px; background:#334155; color:white; }
+    .task-total { display:block; margin:.35rem 0; font-size:2.1rem; font-weight:800; color:#0f766e; }
     .upload { padding:1.45rem; } .upload form p { margin:.8rem 0; }
     label { display:block; margin-bottom:.3rem; font-size:.84rem; font-weight:700; }
     input,select { width:100%; padding:.68rem .75rem; border:1px solid #cbd5e1; border-radius:9px; background:white; font:inherit; }
@@ -32,12 +42,23 @@
     .status.good { background:#dcfce7; color:#166534; } .status.warn { background:#fef3c7; color:#92400e; }
     .muted { color:#64748b; } .empty { padding:1.4rem; text-align:center; color:#64748b; }
     @media(max-width:1100px){header{display:block}}
-    @media(max-width:850px){body{padding:1rem}.top-grid{grid-template-columns:1fr}.section-head{align-items:center}}
+    @media(max-width:850px){body{padding:1rem}.top-grid,.analytics-grid{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,1fr)}.section-head{align-items:center}}
   </style>
 </head>
 <body>
   <header><div><div class="eyebrow">Home Finance</div><h1>Finanzen im Blick</h1><p>Dokumente erfassen, Buchungen prüfen und Ausgaben zuordnen.</p></div>{% include "ledger/_navigation.html" %}</header>
   {% for message in messages %}<div class="card message">{{ message }}</div>{% endfor %}
+  <div class="section-head"><div><h2>Monatsauswertung</h2><span class="muted">{{ selected_month_date|date:"F Y" }}</span></div><form class="month-form" method="get"><label>Monat<input type="month" name="month" value="{{ selected_month }}"></label><button>Anzeigen</button></form></div>
+  <section class="metrics">
+    <div class="card metric">Einnahmen<strong class="positive">{{ totals.income|floatformat:2 }} €</strong></div>
+    <div class="card metric">Ausgaben<strong class="negative">{{ expenses_absolute|floatformat:2 }} €</strong></div>
+    <div class="card metric">Differenz<strong>{{ totals.balance|floatformat:2 }} €</strong></div>
+    <div class="card metric">Zum Vormonat<strong>{% if expense_change == None %}–{% elif expense_change > 0 %}+{{ expense_change }} %{% else %}{{ expense_change }} %{% endif %}</strong></div>
+  </section>
+  <div class="analytics-grid">
+    <section class="card"><div class="eyebrow">Ausgaben nach Kategorie</div>{% for item in category_expenses %}<div class="category-row"><span>{{ item.name }} <small class="muted">{{ item.percent }} %</small></span><span class="bar"><i style="width:{{ item.bar_percent }}%;background:{{ item.color }}"></i></span><strong class="amount">{{ item.amount|floatformat:2 }} €</strong></div>{% empty %}<p>Für diesen Monat liegen noch keine Ausgaben vor.</p>{% endfor %}</section>
+    <section class="card"><div class="eyebrow">Offene Aufgaben</div><span class="task-total">{{ open_task_total }}</span><p>{{ task_counts.uncategorized }} Buchungen ohne Kategorie · {{ task_counts.documents }} Belege zu prüfen · {{ task_counts.statements }} Kontoauszüge zu prüfen{% if task_counts.failed %} · {{ task_counts.failed }} Fehler{% endif %}</p><a class="quick-link" href="{% url 'open_tasks' %}">Arbeitsbereich öffnen <span>→</span></a></section>
+  </div>
   <div class="top-grid">
     <section class="card upload"><div class="eyebrow">Neuer Eingang</div><h2>Dokument hochladen</h2><p>Rechnung, Kassenbeleg oder PDF-Kontoauszug hinzufügen. Die Analyse läuft anschließend im Hintergrund.</p><form method="post" enctype="multipart/form-data" action="{% url 'upload_document' %}">{% csrf_token %}{{ upload_form.as_p }}<button class="primary">Hochladen und verarbeiten</button></form></section>
     <div class="side-stack">

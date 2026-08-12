@@ -12,11 +12,13 @@ urlpatterns = [
     path("documents/<int:pk>/file/", views.document_download, name="document_download"),
     path("statements/<int:pk>/review/", views.statement_review, name="statement_review"),
     path("transactions/", views.transaction_overview, name="transaction_overview"),
+    path("tasks/", views.open_tasks, name="open_tasks"),
     path("settings/classification/", views.manage_classification, name="manage_classification"),
     path(
         "settings/classification/<str:kind>/<int:pk>/toggle/",
         views.toggle_classification,
         name="toggle_classification",
     ),
+    path("settings/classification/rules/<int:pk>/edit/", views.edit_rule, name="edit_rule"),
     path("health/", views.health, name="health"),
 ]

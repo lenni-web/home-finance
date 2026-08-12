@@ -71,10 +71,19 @@ verlangt deshalb eine ausdrückliche Bestätigung:
 Die im Backup enthaltene `environment.env` wird nicht automatisch über die aktuelle
 `.env` geschrieben. Prüfsummen werden vor jeder Wiederherstellung kontrolliert.
 
-## Nächster Entwicklungsschritt
+## Auswertung und Zuordnungen
 
-Der Kontoauszug-Importer erhält pro Bank einen versionierten Parser. Extrahierte
-Buchungen landen zunächst im Prüfstatus und werden erst nach Bestätigung übernommen.
+Das Dashboard wertet ausschließlich bestätigte Buchungen monatsweise aus. Es zeigt
+Einnahmen, Ausgaben, Differenz, den Vergleich zum Vormonat und die Verteilung nach
+Kategorien. Der Arbeitsbereich „Offene Aufgaben“ bündelt ungeprüfte Dokumente,
+fehlgeschlagene Verarbeitungen, Saldo-Abweichungen und Buchungen ohne Kategorie.
+
+Kategorisierungsregeln werden nach einer einstellbaren Priorität ausgewertet. Für den
+Vergleich werden Händlerbezeichnungen konservativ vereinheitlicht; die unveränderten
+Originaltexte bleiben in der Buchung erhalten. Zusätzlich schlägt die Anwendung eine
+Kategorie vor, wenn frühere bestätigte Buchungen desselben normalisierten Händlers
+eine ausreichend eindeutige Zuordnung ergeben. Quelle und Trefferwahrscheinlichkeit
+des Vorschlags werden in der Buchungsübersicht angezeigt.
 
 ## Kontoauszug lokal anonymisieren
 

@@ -1,8 +1,12 @@
 import mimetypes
+from calendar import monthrange
+from datetime import date
+from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, DecimalField, Q, Sum, Value
+from django.db.models.functions import Coalesce
 from django.db.models.functions import TruncMonth
 from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -18,7 +22,7 @@ from .importers import INGStatementParser
 from .models import (
     Account, CategorizationRule, Category, Document, Person, StatementImport, Tag, Transaction,
 )
-from .rules import matching_rules
+from .rules import categorization_suggestion
 from .tasks import process_document_task, process_statement_task
 
 
@@ -31,12 +35,104 @@ def dashboard(request):
         .order_by("-month")
         .distinct()
     )
+    latest_date = Transaction.objects.filter(reviewed=True).order_by("-booking_date").values_list(
+        "booking_date", flat=True
+    ).first()
+    selected_month = request.GET.get("month")
+    try:
+        year, month = map(int, selected_month.split("-")) if selected_month else (
+            (latest_date or date.today()).year, (latest_date or date.today()).month
+        )
+        month_start = date(year, month, 1)
+    except (AttributeError, TypeError, ValueError):
+        month_start = date((latest_date or date.today()).year, (latest_date or date.today()).month, 1)
+    month_end = date(month_start.year, month_start.month, monthrange(month_start.year, month_start.month)[1])
+    if month_start.month == 1:
+        previous_start = date(month_start.year - 1, 12, 1)
+    else:
+        previous_start = date(month_start.year, month_start.month - 1, 1)
+    previous_end = month_start.fromordinal(month_start.toordinal() - 1)
+
+    current = Transaction.objects.filter(
+        reviewed=True, booking_date__range=(month_start, month_end)
+    )
+    previous = Transaction.objects.filter(
+        reviewed=True, booking_date__range=(previous_start, previous_end)
+    )
+    zero = Value(Decimal("0.00"), output_field=DecimalField())
+    totals = current.aggregate(
+        income=Coalesce(Sum("amount", filter=Q(amount__gt=0)), zero),
+        expenses=Coalesce(Sum("amount", filter=Q(amount__lt=0)), zero),
+        balance=Coalesce(Sum("amount"), zero),
+    )
+    previous_expenses = abs(previous.aggregate(
+        value=Coalesce(Sum("amount", filter=Q(amount__lt=0)), zero)
+    )["value"])
+    current_expenses = abs(totals["expenses"])
+    expense_change = None
+    if previous_expenses:
+        expense_change = round((current_expenses - previous_expenses) / previous_expenses * 100)
+    category_expenses = list(
+        current.filter(amount__lt=0).values("category__name", "category__color")
+        .annotate(total=Sum("amount")).order_by("total")
+    )
+    max_category = max((abs(item["total"]) for item in category_expenses), default=Decimal("0"))
+    for item in category_expenses:
+        item["amount"] = abs(item["total"])
+        item["name"] = item["category__name"] or "Ohne Kategorie"
+        item["color"] = item["category__color"] or "#94a3b8"
+        item["percent"] = round(item["amount"] / current_expenses * 100) if current_expenses else 0
+        item["bar_percent"] = round(item["amount"] / max_category * 100) if max_category else 0
+
+    task_counts = _open_task_counts()
     return render(request, "ledger/dashboard.html", {
         "documents": Document.objects.select_related("category").prefetch_related("tags", "people")[:20],
         "transactions": Transaction.objects.select_related("category")[:10],
         "statement_imports": StatementImport.objects.select_related("document", "account")[:10],
         "months": months,
         "upload_form": DocumentUploadForm(),
+        "selected_month": month_start.strftime("%Y-%m"),
+        "selected_month_date": month_start,
+        "totals": totals,
+        "expenses_absolute": current_expenses,
+        "expense_change": expense_change,
+        "category_expenses": category_expenses,
+        "uncategorized_count": current.filter(category__isnull=True).count(),
+        "task_counts": task_counts,
+        "open_task_total": sum(task_counts.values()),
+    })
+
+
+def _open_task_counts():
+    return {
+        "statements": StatementImport.objects.filter(status=StatementImport.Status.REVIEW).count(),
+        "documents": Document.objects.filter(
+            processing_status=Document.ProcessingStatus.REVIEW
+        ).exclude(kind=Document.Kind.BANK_STATEMENT).count(),
+        "failed": Document.objects.filter(processing_status=Document.ProcessingStatus.FAILED).count(),
+        "uncategorized": Transaction.objects.filter(reviewed=True, category__isnull=True).count(),
+        "mismatches": StatementImport.objects.filter(
+            reconciliation_status=StatementImport.ReconciliationStatus.MISMATCH
+        ).count(),
+    }
+
+
+@login_required
+def open_tasks(request):
+    return render(request, "ledger/open_tasks.html", {
+        "counts": _open_task_counts(),
+        "statements": StatementImport.objects.filter(status=StatementImport.Status.REVIEW)
+            .select_related("account", "document"),
+        "documents": Document.objects.filter(processing_status=Document.ProcessingStatus.REVIEW)
+            .exclude(kind=Document.Kind.BANK_STATEMENT),
+        "failed_documents": Document.objects.filter(
+            processing_status=Document.ProcessingStatus.FAILED
+        ),
+        "mismatches": StatementImport.objects.filter(
+            reconciliation_status=StatementImport.ReconciliationStatus.MISMATCH
+        ).select_related("account", "document"),
+        "uncategorized": Transaction.objects.filter(reviewed=True, category__isnull=True)
+            .select_related("statement_import__account")[:25],
     })
 
 
@@ -199,8 +295,7 @@ def transaction_overview(request):
         balance=Sum("amount", default=0),
     )
     for form in formset.forms:
-        suggestions = matching_rules(form.instance)
-        form.instance.rule_suggestion = suggestions[0] if suggestions else None
+        form.instance.rule_suggestion = categorization_suggestion(form.instance)
     return render(request, "ledger/transaction_overview.html", {
         "filters": filters,
         "formset": formset,
@@ -264,6 +359,17 @@ def manage_classification(request):
             "tags", "people"
         ),
     })
+
+
+@login_required
+def edit_rule(request, pk):
+    rule = get_object_or_404(CategorizationRule, pk=pk)
+    form = CategorizationRuleForm(request.POST or None, instance=rule)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, f"Regel „{rule.name}“ wurde aktualisiert.")
+        return redirect("manage_classification")
+    return render(request, "ledger/edit_rule.html", {"form": form, "rule": rule})
 
 
 @login_required

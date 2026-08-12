@@ -11,6 +11,7 @@
   <a href="{% url 'dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">Übersicht</a>
   <a href="{% url 'transaction_overview' %}" class="{% if request.resolver_match.url_name == 'transaction_overview' %}active{% endif %}">Buchungen</a>
   <a href="{% url 'document_archive' %}" class="{% if request.resolver_match.url_name == 'document_archive' or request.resolver_match.url_name == 'document_review' %}active{% endif %}">Dokumente</a>
+  <a href="{% url 'open_tasks' %}" class="{% if request.resolver_match.url_name == 'open_tasks' %}active{% endif %}">Offene Aufgaben</a>
   <a href="{% url 'manage_classification' %}" class="{% if request.resolver_match.url_name == 'manage_classification' %}active{% endif %}">Kategorien & Regeln</a>
   <a href="{% url 'settings' %}" class="{% if request.resolver_match.url_name == 'settings' %}active{% endif %}">Einstellungen</a>
   <form class="logout" method="post" action="{% url 'logout' %}">{% csrf_token %}<button>Abmelden</button></form>

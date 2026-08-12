@@ -46,7 +46,7 @@
         <td><input type="checkbox" name="selected" value="{{ form.instance.pk }}">{{ form.id }}</td>
         <td>{{ form.instance.booking_date|date:"d.m.Y" }}<div class="muted">Valuta {{ form.instance.value_date|date:"d.m.Y" }}</div></td>
         <td>{{ form.instance.statement_import.account }}</td>
-        <td><strong>{{ form.instance.counterparty|default:form.instance.booking_type }}</strong><div class="muted">{{ form.instance.description|linebreaksbr|truncatechars:220 }}</div>{% if form.instance.rule_suggestion %}<span class="suggestion">Regelvorschlag: {{ form.instance.rule_suggestion.category|default:form.instance.rule_suggestion.name }}</span>{% endif %}</td>
+        <td><strong>{{ form.instance.counterparty|default:form.instance.booking_type }}</strong><div class="muted">{{ form.instance.description|linebreaksbr|truncatechars:220 }}</div>{% if form.instance.rule_suggestion %}<span class="suggestion">Vorschlag: {{ form.instance.rule_suggestion.category|default:"Zuordnung" }} · {{ form.instance.rule_suggestion.confidence }} % sicher · {{ form.instance.rule_suggestion.source }}</span>{% endif %}</td>
         <td class="number {% if form.instance.amount < 0 %}negative{% else %}positive{% endif %}">{{ form.instance.amount|floatformat:2 }} €</td>
         <td>{{ form.category.errors }}{{ form.category }}</td>
         <td>{{ form.tags.errors }}{{ form.tags }}</td>
