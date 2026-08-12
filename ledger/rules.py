@@ -1,6 +1,7 @@
 import re
 from dataclasses import dataclass
 
+from django.db import transaction as db_transaction
 from django.db.models import F
 
 from .models import CategorizationRule, Transaction
@@ -30,6 +31,19 @@ class RuleSuggestion:
     @property
     def name(self):
         return self.rule.name if self.rule else f"Erlernt aus {self.sample_count} Buchungen"
+
+
+@dataclass
+class RuleApplication:
+    transaction: object
+    rules: list
+    category: object
+    tag_ids: set
+    person_ids: set
+
+    @property
+    def rule_names(self):
+        return ", ".join(rule.name for rule in self.rules)
 
 
 def matching_rules(transaction, *, auto_only=False):
@@ -92,3 +106,54 @@ def apply_categorization_rules(transaction):
         CategorizationRule.objects.filter(pk=rule.pk).update(times_applied=F("times_applied") + 1)
         applied.append(rule)
     return applied
+
+
+def build_rule_application_plan(scope="uncategorized"):
+    queryset = Transaction.objects.filter(reviewed=True).select_related(
+        "category", "statement_import__account"
+    ).prefetch_related("tags", "people").order_by("-booking_date", "-id")
+    if scope == "uncategorized":
+        queryset = queryset.filter(category__isnull=True)
+    elif scope != "all":
+        raise ValueError("Ungültiger Anwendungsbereich für Regeln.")
+
+    rules = list(
+        CategorizationRule.objects.filter(active=True, auto_apply=True)
+        .select_related("category").prefetch_related("tags", "people")
+        .order_by("-priority", "name")
+    )
+    plan = []
+    for item in queryset:
+        matches = [rule for rule in rules if rule.matches(item)]
+        if not matches:
+            continue
+        category = next((rule.category for rule in matches if rule.category_id), None)
+        tag_ids = {tag.pk for rule in matches for tag in rule.tags.all()}
+        person_ids = {person.pk for rule in matches for person in rule.people.all()}
+        existing_tag_ids = {tag.pk for tag in item.tags.all()}
+        existing_person_ids = {person.pk for person in item.people.all()}
+        if (
+            (category and category.pk != item.category_id)
+            or not tag_ids.issubset(existing_tag_ids)
+            or not person_ids.issubset(existing_person_ids)
+        ):
+            plan.append(RuleApplication(item, matches, category, tag_ids, person_ids))
+    return plan
+
+
+def apply_rule_application_plan(plan):
+    with db_transaction.atomic():
+        for application in plan:
+            item = application.transaction
+            if application.category and item.category_id != application.category.pk:
+                item.category = application.category
+                item.save(update_fields=["category", "updated_at"])
+            if application.tag_ids:
+                item.tags.add(*application.tag_ids)
+            if application.person_ids:
+                item.people.add(*application.person_ids)
+            for rule in application.rules:
+                CategorizationRule.objects.filter(pk=rule.pk).update(
+                    times_applied=F("times_applied") + 1
+                )
+    return len(plan)

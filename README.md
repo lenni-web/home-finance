@@ -107,6 +107,13 @@ Kategorie vor, wenn frühere bestätigte Buchungen desselben normalisierten Hän
 eine ausreichend eindeutige Zuordnung ergeben. Quelle und Trefferwahrscheinlichkeit
 des Vorschlags werden in der Buchungsübersicht angezeigt.
 
+Über **Kategorien & Regeln → Regeln jetzt anwenden** lassen sich aktive automatische
+Regeln auch rückwirkend auf bestätigte Buchungen anwenden. Vor jeder Änderung erscheint
+eine Vorschau. Standardmäßig werden nur Buchungen ohne Kategorie bearbeitet; der
+optionale Modus „Alle Buchungen neu kategorisieren“ darf bestehende Kategorien anhand
+der höchsten Regelpriorität ersetzen. Tags und Personen werden dabei ergänzt, nicht
+entfernt.
+
 ## Kontoauszug lokal anonymisieren
 
 Das Original-PDF muss für die Parserentwicklung nicht weitergegeben werden. Das

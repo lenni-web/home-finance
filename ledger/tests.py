@@ -365,6 +365,80 @@ class CategorizationWorkflowTests(TestCase):
         self.assertEqual(applied, [rule])
         self.assertEqual(rule.times_applied, 1)
 
+    def test_existing_rule_preview_does_not_change_transaction(self):
+        category = Category.objects.create(name="Vorschau")
+        CategorizationRule.objects.create(
+            name="Markt automatisch", match_text="Beispielmarkt",
+            category=category, auto_apply=True,
+        )
+
+        response = self.client.post(reverse("manage_classification"), {
+            "kind": "apply_rules", "scope": "uncategorized", "action": "preview",
+        })
+
+        self.item.refresh_from_db()
+        self.assertContains(response, "Vorschau: 1 Buchung(en)")
+        self.assertContains(response, "Markt automatisch")
+        self.assertIsNone(self.item.category)
+
+    def test_existing_rules_apply_to_uncategorized_transactions_after_confirmation(self):
+        category = Category.objects.create(name="Automatisch")
+        tag = Tag.objects.create(name="Regeltag")
+        person = Person.objects.create(name="Regelperson")
+        rule = CategorizationRule.objects.create(
+            name="Markt automatisch", match_text="Beispielmarkt",
+            category=category, auto_apply=True,
+        )
+        rule.tags.add(tag)
+        rule.people.add(person)
+
+        response = self.client.post(reverse("manage_classification"), {
+            "kind": "apply_rules", "scope": "uncategorized", "action": "apply",
+        })
+
+        self.item.refresh_from_db()
+        rule.refresh_from_db()
+        self.assertRedirects(response, reverse("manage_classification"))
+        self.assertEqual(self.item.category, category)
+        self.assertEqual(self.item.tags.get(), tag)
+        self.assertEqual(self.item.people.get(), person)
+        self.assertEqual(rule.times_applied, 1)
+
+    def test_default_rule_application_preserves_existing_category(self):
+        existing = Category.objects.create(name="Manuell")
+        automatic = Category.objects.create(name="Automatisch")
+        self.item.category = existing
+        self.item.save(update_fields=["category", "updated_at"])
+        CategorizationRule.objects.create(
+            name="Markt automatisch", match_text="Beispielmarkt",
+            category=automatic, auto_apply=True,
+        )
+
+        response = self.client.post(reverse("manage_classification"), {
+            "kind": "apply_rules", "scope": "uncategorized", "action": "apply",
+        })
+
+        self.item.refresh_from_db()
+        self.assertRedirects(response, reverse("manage_classification"))
+        self.assertEqual(self.item.category, existing)
+
+    def test_all_scope_replaces_existing_category_using_priority(self):
+        existing = Category.objects.create(name="Alt")
+        automatic = Category.objects.create(name="Neu")
+        self.item.category = existing
+        self.item.save(update_fields=["category", "updated_at"])
+        CategorizationRule.objects.create(
+            name="Markt automatisch", match_text="Beispielmarkt",
+            category=automatic, auto_apply=True, priority=200,
+        )
+
+        self.client.post(reverse("manage_classification"), {
+            "kind": "apply_rules", "scope": "all", "action": "apply",
+        })
+
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.category, automatic)
+
     def test_non_automatic_rule_is_shown_as_suggestion(self):
         category = Category.objects.create(name="Vorschlag")
         CategorizationRule.objects.create(

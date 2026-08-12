@@ -23,7 +23,9 @@ from .models import (
     Account, CategorizationRule, Category, Document, EmailImportConfig, EmailImportMessage,
     Person, StatementImport, Tag, Transaction,
 )
-from .rules import categorization_suggestion
+from .rules import (
+    apply_rule_application_plan, build_rule_application_plan, categorization_suggestion,
+)
 from .tasks import poll_email_import_task, process_document_task, process_statement_task
 
 
@@ -383,6 +385,20 @@ def manage_classification(request):
     }
     if request.method == "POST":
         kind = request.POST.get("kind")
+        if kind == "apply_rules":
+            scope = request.POST.get("scope", "uncategorized")
+            try:
+                rule_plan = build_rule_application_plan(scope)
+            except ValueError:
+                messages.error(request, "Der gewählte Anwendungsbereich ist ungültig.")
+                return redirect("manage_classification")
+            if request.POST.get("action") == "apply":
+                applied_count = apply_rule_application_plan(rule_plan)
+                messages.success(
+                    request,
+                    f"Regeln wurden auf {applied_count} Buchung(en) angewendet.",
+                )
+                return redirect("manage_classification")
         form_classes = {
             "category": CategoryForm,
             "tag": TagForm,
@@ -404,6 +420,8 @@ def manage_classification(request):
         "rules": CategorizationRule.objects.select_related("category").prefetch_related(
             "tags", "people"
         ),
+        "rule_plan": locals().get("rule_plan"),
+        "rule_scope": request.POST.get("scope", "uncategorized"),
     })
 
 
