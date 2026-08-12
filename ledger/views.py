@@ -408,6 +408,27 @@ def edit_rule(request, pk):
 
 
 @login_required
+def edit_classification(request, kind, pk):
+    editable = {
+        "category": (Category, CategoryForm, "Kategorie"),
+        "person": (Person, PersonForm, "Person"),
+    }
+    definition = editable.get(kind)
+    if definition is None:
+        return redirect("manage_classification")
+    model, form_class, label = definition
+    item = get_object_or_404(model, pk=pk)
+    form = form_class(request.POST or None, instance=item)
+    if request.method == "POST" and form.is_valid():
+        updated = form.save()
+        messages.success(request, f"{label} „{updated}“ wurde aktualisiert.")
+        return redirect("manage_classification")
+    return render(request, "ledger/edit_classification.html", {
+        "form": form, "item": item, "label": label,
+    })
+
+
+@login_required
 def toggle_classification(request, kind, pk):
     if request.method != "POST":
         return redirect("manage_classification")

@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{{ label }} bearbeiten · Ausgabenarchiv</title>
+  <style>
+    :root{font-family:Inter,ui-sans-serif,system-ui,sans-serif;color:#172033;background:#f1f5f9}*{box-sizing:border-box}body{max-width:720px;margin:auto;padding:1.5rem}.card{background:white;border:1px solid #dbe3ec;border-radius:16px;padding:1.4rem;box-shadow:0 5px 20px rgba(15,23,42,.04)}h1{margin-top:0}p{color:#64748b}label{display:block;margin:.8rem 0 .3rem;font-weight:700}input{width:100%;padding:.7rem;border:1px solid #cbd5e1;border-radius:9px;font:inherit}input[type=color]{height:52px;padding:.3rem}button{margin-top:1rem;padding:.72rem 1rem;border:0;border-radius:9px;background:#0f766e;color:white;font-weight:700;cursor:pointer}a{color:#0f766e;font-weight:650;text-decoration:none}.errorlist{color:#b91c1c}
+  </style>
+</head>
+<body><p><a href="{% url 'manage_classification' %}">← Zurück zu Kategorien & Regeln</a></p><section class="card"><h1>{{ label }} bearbeiten</h1><p>Bestehende Zuordnungen bleiben erhalten.</p><form method="post">{% csrf_token %}{{ form.as_p }}<button>Änderungen speichern</button></form></section></body>
+</html>

@@ -416,6 +416,45 @@ class CategorizationWorkflowTests(TestCase):
         self.assertRedirects(response, reverse("manage_classification"))
         self.assertFalse(category.active)
 
+    def test_category_can_be_renamed_and_recolored_without_losing_assignment(self):
+        category = Category.objects.create(name="Alt", color="#111111")
+        self.item.category = category
+        self.item.save(update_fields=["category", "updated_at"])
+
+        response = self.client.post(
+            reverse("edit_classification", args=["category", category.pk]),
+            {"name": "Neu", "color": "#22aa44"},
+        )
+
+        category.refresh_from_db()
+        self.item.refresh_from_db()
+        self.assertRedirects(response, reverse("manage_classification"))
+        self.assertEqual(category.name, "Neu")
+        self.assertEqual(category.color, "#22aa44")
+        self.assertEqual(self.item.category, category)
+
+    def test_person_can_be_renamed_and_recolored_without_losing_assignment(self):
+        person = Person.objects.create(name="Alte Person", color="#111111")
+        self.item.people.add(person)
+
+        response = self.client.post(
+            reverse("edit_classification", args=["person", person.pk]),
+            {"name": "Neue Person", "color": "#663399"},
+        )
+
+        person.refresh_from_db()
+        self.assertRedirects(response, reverse("manage_classification"))
+        self.assertEqual(person.name, "Neue Person")
+        self.assertEqual(person.color, "#663399")
+        self.assertEqual(self.item.people.get(), person)
+
+    def test_unsupported_classification_edit_redirects(self):
+        tag = Tag.objects.create(name="Nicht editierbar")
+
+        response = self.client.get(reverse("edit_classification", args=["tag", tag.pk]))
+
+        self.assertRedirects(response, reverse("manage_classification"))
+
 
 class DocumentProcessingTests(TestCase):
     def setUp(self):
