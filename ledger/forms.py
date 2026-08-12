@@ -241,7 +241,7 @@ class TransactionCategorizationForm(forms.ModelForm):
         fields = ["category", "tags", "people"]
         widgets = {
             "tags": forms.SelectMultiple(attrs={"size": 3}),
-            "people": forms.SelectMultiple(attrs={"size": 3}),
+            "people": forms.SelectMultiple(attrs={"size": 4}),
         }
 
 
@@ -261,7 +261,7 @@ class BulkCategorizationForm(forms.Form):
     )
     people = forms.ModelMultipleChoiceField(
         queryset=Person.objects.filter(active=True), required=False,
-        widget=forms.SelectMultiple(attrs={"size": 3}),
+        widget=forms.SelectMultiple(attrs={"size": 4}),
     )
     create_rules = forms.BooleanField(
         required=False, label="Für ausgewählte Zahlungspartner Regeln anlegen"

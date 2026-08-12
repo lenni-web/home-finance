@@ -295,6 +295,12 @@ class CategorizationWorkflowTests(TestCase):
         self.assertContains(response, "Beispielmarkt Berlin")
         self.assertContains(response, "-42,50")
 
+    def test_people_selects_show_at_least_four_entries(self):
+        response = self.client.get(reverse("transaction_overview"))
+
+        self.assertContains(response, 'name="transactions-0-people" size="4"')
+        self.assertContains(response, 'name="bulk-people" size="4"')
+
     def test_bulk_assignment_and_rule_creation(self):
         category = Category.objects.create(name="Lebensmittel")
         tag = Tag.objects.create(name="Haushalt")
