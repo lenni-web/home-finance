@@ -20,7 +20,7 @@ class TransactionAdmin(admin.ModelAdmin):
         "booking_date", "booking_type", "counterparty", "amount", "category", "reviewed"
     )
     list_filter = ("reviewed", "category", "tags", "people")
-    search_fields = ("counterparty", "description")
+    search_fields = ("counterparty", "description", "comment")
     date_hierarchy = "booking_date"
 
 

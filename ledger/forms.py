@@ -238,10 +238,15 @@ class TransactionFilterForm(forms.Form):
 class TransactionCategorizationForm(forms.ModelForm):
     class Meta:
         model = Transaction
-        fields = ["category", "tags", "people"]
+        fields = ["category", "tags", "people", "comment"]
+        labels = {"comment": "Kommentar"}
         widgets = {
             "tags": forms.SelectMultiple(attrs={"size": 3}),
             "people": forms.SelectMultiple(attrs={"size": 4}),
+            "comment": forms.Textarea(attrs={
+                "rows": 3,
+                "placeholder": "Ausgabe kurz erklären …",
+            }),
         }
 
 

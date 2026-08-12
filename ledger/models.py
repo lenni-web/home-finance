@@ -171,6 +171,7 @@ class Transaction(TimestampedModel):
     value_date = models.DateField(null=True, blank=True)
     booking_type = models.CharField(max_length=120, blank=True)
     description = models.TextField()
+    comment = models.TextField(blank=True)
     counterparty = models.CharField(max_length=255, blank=True)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     currency = models.CharField(max_length=3, default="EUR")

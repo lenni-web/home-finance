@@ -302,7 +302,9 @@ def transaction_overview(request):
             queryset = queryset.filter(category__isnull=True)
         if values.get("q"):
             queryset = queryset.filter(
-                Q(counterparty__icontains=values["q"]) | Q(description__icontains=values["q"])
+                Q(counterparty__icontains=values["q"])
+                | Q(description__icontains=values["q"])
+                | Q(comment__icontains=values["q"])
             )
     queryset = queryset.distinct()
 

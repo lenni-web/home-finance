@@ -16,7 +16,7 @@
     input, select, textarea { box-sizing: border-box; width: 100%; padding: .45rem; }
     .table-wrap { overflow-x: auto; }
     .selection-checkbox { width:22px; height:22px; min-width:22px; margin:.15rem; accent-color:#0f766e; cursor:pointer; }
-    table { border-collapse: collapse; width: 100%; min-width: 1300px; }
+    table { border-collapse: collapse; width: 100%; min-width: 1500px; }
     th, td { padding: .5rem; text-align: left; vertical-align: top; border-bottom: 1px solid #e2e8f0; }
     th { position: sticky; top: 0; background: white; }
     .number { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -42,7 +42,7 @@
   <section class="card"><form method="get"><div class="filters">{{ filters.as_p }}</div><p><button>Filter anwenden</button> <a class="button-link secondary" href="{% url 'transaction_overview' %}">Zurücksetzen</a></p></form></section>
   <form method="post">{% csrf_token %}{{ formset.management_form }}{{ formset.non_form_errors }}
     <section class="card"><h2>Auswahl gemeinsam bearbeiten</h2><div class="bulk-grid">{{ bulk_form.as_p }}</div><p><button name="action" value="bulk">Auf markierte Buchungen anwenden</button></p></section>
-    <section class="card table-wrap"><table><thead><tr><th><input class="selection-checkbox" type="checkbox" aria-label="Alle auswählen" onclick="document.querySelectorAll('[name=selected]').forEach(x => x.checked=this.checked)"></th><th>Datum</th><th>Konto</th><th>Zahlungspartner / Zweck</th><th>Betrag</th><th>Kategorie</th><th>Tags</th><th>Personen</th></tr></thead><tbody>
+    <section class="card table-wrap"><table><thead><tr><th><input class="selection-checkbox" type="checkbox" aria-label="Alle auswählen" onclick="document.querySelectorAll('[name=selected]').forEach(x => x.checked=this.checked)"></th><th>Datum</th><th>Konto</th><th>Zahlungspartner / Zweck</th><th>Betrag</th><th>Kategorie</th><th>Tags</th><th>Personen</th><th>Kommentar</th></tr></thead><tbody>
       {% for form in formset %}<tr>
         <td><input class="selection-checkbox" type="checkbox" name="selected" value="{{ form.instance.pk }}" aria-label="Buchung auswählen">{{ form.id }}</td>
         <td>{{ form.instance.booking_date|date:"d.m.Y" }}<div class="muted">Valuta {{ form.instance.value_date|date:"d.m.Y" }}</div></td>
@@ -52,7 +52,8 @@
         <td>{{ form.category.errors }}{{ form.category }}</td>
         <td>{{ form.tags.errors }}{{ form.tags }}</td>
         <td>{{ form.people.errors }}{{ form.people }}</td>
-      </tr>{% empty %}<tr><td colspan="8">Keine Buchungen für diesen Filter.</td></tr>{% endfor %}
+        <td>{{ form.comment.errors }}{{ form.comment }}</td>
+      </tr>{% empty %}<tr><td colspan="9">Keine Buchungen für diesen Filter.</td></tr>{% endfor %}
     </tbody></table></section>
     <div class="actions"><button class="secondary" name="action" value="inline_save">Einzelne Zuordnungen speichern</button></div>
   </form>

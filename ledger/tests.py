@@ -301,6 +301,28 @@ class CategorizationWorkflowTests(TestCase):
         self.assertContains(response, 'name="transactions-0-people" size="4"')
         self.assertContains(response, 'name="bulk-people" size="4"')
 
+    def test_transaction_comment_can_be_saved_and_searched(self):
+        response = self.client.post(reverse("transaction_overview"), {
+            "transactions-TOTAL_FORMS": "1",
+            "transactions-INITIAL_FORMS": "1",
+            "transactions-MIN_NUM_FORMS": "0",
+            "transactions-MAX_NUM_FORMS": "1000",
+            "transactions-0-id": str(self.item.pk),
+            "transactions-0-category": "",
+            "transactions-0-tags": [],
+            "transactions-0-people": [],
+            "transactions-0-comment": "Geburtstagsgeschenk für die Familie",
+            "action": "inline_save",
+        })
+
+        self.assertRedirects(response, reverse("transaction_overview"))
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.comment, "Geburtstagsgeschenk für die Familie")
+
+        response = self.client.get(reverse("transaction_overview"), {"q": "Geburtstagsgeschenk"})
+        self.assertContains(response, "Beispielmarkt Berlin")
+        self.assertContains(response, "Geburtstagsgeschenk für die Familie")
+
     def test_transaction_selection_uses_large_checkbox_style(self):
         response = self.client.get(reverse("transaction_overview"))
 
