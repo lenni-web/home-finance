@@ -8,7 +8,9 @@
   <style>
     :root { font-family: system-ui, sans-serif; color: #1f2937; background: #f8fafc; }
     body { max-width: 1250px; margin: auto; padding: 1.5rem; }
-    header { display: flex; justify-content: space-between; }
+    header { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:.65rem 1.25rem; margin-bottom:.5rem; }
+    .page-title { flex:0 0 auto; }
+    .page-title h1 { margin:0; font-size:1.65rem; letter-spacing:-.035em; white-space:nowrap; }
     .grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 1rem; }
     .card { background: white; border: 1px solid #e2e8f0; border-radius: 14px; padding: 1rem; margin: 1rem 0; }
     label { display: block; font-weight: 650; margin-top: .6rem; }
@@ -34,11 +36,11 @@
     .result-count { white-space:nowrap; padding:.3rem .6rem; border-radius:999px; background:#e2e8f0; font-weight:700; }
     .muted { color:#64748b; font-size:.85rem; }
     @media (max-width: 900px) { .filter-grid { grid-template-columns:1fr 1fr; } }
-    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } header { display:block; } }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } .page-title h1 { font-size:1.45rem; white-space:normal; } }
   </style>
 </head>
 <body>
-  <header><div><h1>Kategorien, Tags, Personen & Regeln</h1><p>Zuordnungen zentral verwalten und Automatisierung nachvollziehbar halten.</p></div>{% include "ledger/_navigation.html" %}</header>
+  <header><div class="page-title"><h1>Kategorien, Tags, Personen & Regeln</h1></div>{% include "ledger/_navigation.html" %}</header>
   {% for message in messages %}<div class="card messages">{{ message }}</div>{% endfor %}
   <div class="grid">
     <section class="card"><h2>Kategorie anlegen</h2><form method="post">{% csrf_token %}<input type="hidden" name="kind" value="category">{{ forms.category.as_p }}<button>Anlegen</button></form></section>

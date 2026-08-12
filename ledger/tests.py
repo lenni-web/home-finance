@@ -705,6 +705,10 @@ class CategorizationWorkflowTests(TestCase):
         self.assertContains(response, "Zweite Regel")
         self.assertNotContains(response, "Erste Regel")
         self.assertContains(response, "1 von 2")
+        self.assertContains(response, 'class="page-title"')
+        self.assertNotContains(
+            response, "Zuordnungen zentral verwalten und Automatisierung nachvollziehbar halten."
+        )
 
         response = self.client.get(reverse("manage_classification"), {
             "sort": "priority_asc",
