@@ -14,6 +14,7 @@ from django.db.models import Count, DecimalField, Q, Sum, Value
 from django.db.models.functions import Coalesce
 from django.db.models.functions import TruncMonth
 from django.http import FileResponse, HttpResponse
+from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -482,11 +483,36 @@ def transaction_overview(request):
     per_page = request.GET.get("per_page", "30")
     if per_page not in {"30", "50", "100", "all"}:
         per_page = "30"
-    display_queryset = queryset if per_page == "all" else queryset[:int(per_page)]
+    page_obj = None
+    pagination_links = []
+    if per_page == "all":
+        display_queryset = queryset
+        displayed_from = 1 if transaction_count else 0
+        displayed_to = transaction_count
+    else:
+        paginator = Paginator(queryset, int(per_page))
+        page_obj = paginator.get_page(request.GET.get("page", 1))
+        display_queryset = page_obj.object_list
+        displayed_from = page_obj.start_index()
+        displayed_to = page_obj.end_index()
+        for page_number in paginator.get_elided_page_range(
+            page_obj.number, on_each_side=2, on_ends=1
+        ):
+            if page_number == paginator.ELLIPSIS:
+                pagination_links.append({"ellipsis": True})
+                continue
+            params = request.GET.copy()
+            params["page"] = page_number
+            pagination_links.append({
+                "number": page_number,
+                "current": page_number == page_obj.number,
+                "url": f"?{params.urlencode()}",
+            })
     per_page_options = []
     for value, label in [("30", "30"), ("50", "50"), ("100", "100"), ("all", "Alle")]:
         params = request.GET.copy()
         params["per_page"] = value
+        params.pop("page", None)
         per_page_options.append({
             "value": value, "label": label, "url": f"?{params.urlencode()}",
         })
@@ -563,11 +589,12 @@ def transaction_overview(request):
         "bulk_form": bulk_form,
         "totals": totals,
         "transaction_count": transaction_count,
-        "displayed_count": transaction_count if per_page == "all" else min(
-            int(per_page), transaction_count
-        ),
+        "displayed_from": displayed_from,
+        "displayed_to": displayed_to,
         "per_page": per_page,
         "per_page_options": per_page_options,
+        "page_obj": page_obj,
+        "pagination_links": pagination_links,
         "uncategorized_count": queryset.filter(
             category__isnull=True, is_internal_transfer=False
         ).count(),

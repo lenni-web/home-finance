@@ -32,6 +32,12 @@
     .actions { position: sticky; bottom: 0; padding: 1rem; background: rgba(248,250,252,.96); display: flex; justify-content: flex-end; gap: .75rem; }
     .table-footer { display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-top:1rem; }
     .table-footer select { width:auto; min-width:85px; }
+    .pagination { display:flex; justify-content:center; align-items:center; gap:.35rem; flex-wrap:wrap; margin:1rem 0 .25rem; }
+    .pagination a,.pagination span { display:inline-grid; place-items:center; min-width:36px; min-height:36px; padding:.35rem .55rem; border-radius:8px; text-decoration:none; }
+    .pagination a { background:#e2e8f0; color:#334155; font-weight:700; }
+    .pagination a:hover { background:#cbd5e1; }
+    .pagination .current { background:#0f766e; color:white; font-weight:750; }
+    .pagination .disabled { color:#94a3b8; }
     .messages { border-left: 4px solid #0f766e; }
     @media (max-width: 800px) { header, .summary, .filters, .bulk-grid { display: block; } .metric { margin-bottom: .7rem; } }
   </style>
@@ -60,7 +66,7 @@
         <td>{{ form.people.errors }}{{ form.people }}</td>
         <td>{{ form.comment.errors }}{{ form.comment }}</td>
       </tr>{% empty %}<tr><td colspan="10">Keine Buchungen für diesen Filter.</td></tr>{% endfor %}
-    </tbody></table><div class="table-footer"><span class="muted">{{ displayed_count }} von {{ transaction_count }} Buchungen angezeigt</span><label>Einträge anzeigen <select onchange="window.location.href=this.value">{% for option in per_page_options %}<option value="{{ option.url }}" {% if option.value == per_page %}selected{% endif %}>{{ option.label }}</option>{% endfor %}</select></label></div></section>
+    </tbody></table>{% if page_obj and page_obj.paginator.num_pages > 1 %}<nav class="pagination" aria-label="Seitennavigation">{% if page_obj.has_previous %}<a href="{% querystring page=page_obj.previous_page_number %}">← Zurück</a>{% else %}<span class="disabled">← Zurück</span>{% endif %}{% for link in pagination_links %}{% if link.ellipsis %}<span>…</span>{% elif link.current %}<span class="current" aria-current="page">{{ link.number }}</span>{% else %}<a href="{{ link.url }}">{{ link.number }}</a>{% endif %}{% endfor %}{% if page_obj.has_next %}<a href="{% querystring page=page_obj.next_page_number %}">Weiter →</a>{% else %}<span class="disabled">Weiter →</span>{% endif %}</nav>{% endif %}<div class="table-footer"><span class="muted">{{ displayed_from }}–{{ displayed_to }} von {{ transaction_count }} Buchungen angezeigt</span><label>Einträge anzeigen <select onchange="window.location.href=this.value">{% for option in per_page_options %}<option value="{{ option.url }}" {% if option.value == per_page %}selected{% endif %}>{{ option.label }}</option>{% endfor %}</select></label></div></section>
     <div class="actions"><button class="secondary" name="action" value="inline_save">Einzelne Zuordnungen speichern</button></div>
   </form>
 </body></html>

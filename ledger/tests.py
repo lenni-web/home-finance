@@ -796,11 +796,19 @@ class CategorizationWorkflowTests(TestCase):
         ])
 
         default_response = self.client.get(reverse("transaction_overview"))
+        second_page_response = self.client.get(
+            reverse("transaction_overview"), {"page": "2"}
+        )
         fifty_response = self.client.get(reverse("transaction_overview"), {"per_page": "50"})
         all_response = self.client.get(reverse("transaction_overview"), {"per_page": "all"})
 
         self.assertEqual(len(default_response.context["formset"].forms), 30)
-        self.assertContains(default_response, "30 von 36 Buchungen angezeigt")
+        self.assertContains(default_response, "1–30 von 36 Buchungen angezeigt")
+        self.assertContains(default_response, "Weiter →")
+        self.assertContains(default_response, "?page=2")
+        self.assertEqual(len(second_page_response.context["formset"].forms), 6)
+        self.assertContains(second_page_response, "31–36 von 36 Buchungen angezeigt")
+        self.assertContains(second_page_response, "← Zurück")
         self.assertEqual(len(fifty_response.context["formset"].forms), 36)
         self.assertEqual(len(all_response.context["formset"].forms), 36)
         self.assertContains(default_response, ">100</option>", html=False)
