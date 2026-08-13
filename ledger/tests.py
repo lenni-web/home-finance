@@ -754,13 +754,16 @@ class CategorizationWorkflowTests(TestCase):
         self.assertContains(response, "Beispielmarkt Berlin")
         self.assertNotContains(response, "Vorjahr")
 
-    def test_open_tasks_lists_uncategorized_transactions(self):
+    def test_open_tasks_shows_uncategorized_count_without_transaction_list(self):
         response = self.client.get(reverse("open_tasks"))
 
-        self.assertContains(response, "Beispielmarkt Berlin")
         self.assertContains(response, "Buchungen ohne Kategorie")
+        self.assertContains(response, "<strong>1</strong>", html=True)
+        self.assertContains(response, "Buchung müssen noch kategorisiert werden")
+        self.assertContains(response, "Unkategorisierte Buchungen bearbeiten")
+        self.assertNotContains(response, "Beispielmarkt Berlin")
 
-    def test_open_tasks_lists_all_uncategorized_transactions(self):
+    def test_open_tasks_counts_all_uncategorized_transactions_without_listing_them(self):
         Transaction.objects.bulk_create([
             Transaction(
                 statement_import=self.statement,
@@ -775,9 +778,33 @@ class CategorizationWorkflowTests(TestCase):
 
         response = self.client.get(reverse("open_tasks"))
 
-        self.assertContains(response, "Noch offen 01")
-        self.assertContains(response, "Noch offen 26")
+        self.assertNotContains(response, "Noch offen 01")
+        self.assertNotContains(response, "Noch offen 26")
         self.assertContains(response, '<div class="card metric">Ohne Kategorie<strong>27</strong></div>', html=True)
+
+    def test_transaction_overview_defaults_to_30_rows_and_allows_page_size_selection(self):
+        Transaction.objects.bulk_create([
+            Transaction(
+                statement_import=self.statement,
+                booking_date=date(2026, 8, 3),
+                counterparty=f"Listenbuchung {number:02d}",
+                amount="-1.00",
+                source_fingerprint=f"{number + 100:064x}",
+                reviewed=True,
+            )
+            for number in range(35)
+        ])
+
+        default_response = self.client.get(reverse("transaction_overview"))
+        fifty_response = self.client.get(reverse("transaction_overview"), {"per_page": "50"})
+        all_response = self.client.get(reverse("transaction_overview"), {"per_page": "all"})
+
+        self.assertEqual(len(default_response.context["formset"].forms), 30)
+        self.assertContains(default_response, "30 von 36 Buchungen angezeigt")
+        self.assertEqual(len(fifty_response.context["formset"].forms), 36)
+        self.assertEqual(len(all_response.context["formset"].forms), 36)
+        self.assertContains(default_response, ">100</option>", html=False)
+        self.assertContains(default_response, ">Alle</option>", html=False)
 
     def test_learns_suggestion_from_confirmed_normalized_merchant(self):
         category = Category.objects.create(name="Lebensmittel")

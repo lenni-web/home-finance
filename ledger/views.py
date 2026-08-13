@@ -299,10 +299,6 @@ def open_tasks(request):
         "mismatches": StatementImport.objects.filter(
             reconciliation_status=StatementImport.ReconciliationStatus.MISMATCH
         ).select_related("account", "document"),
-        "uncategorized": Transaction.objects.filter(
-            reviewed=True, category__isnull=True, is_internal_transfer=False
-        )
-            .select_related("statement_import__account"),
     })
 
 
@@ -482,10 +478,22 @@ def transaction_overview(request):
                 | Q(comment__icontains=values["q"])
             )
     queryset = queryset.distinct()
+    transaction_count = queryset.count()
+    per_page = request.GET.get("per_page", "30")
+    if per_page not in {"30", "50", "100", "all"}:
+        per_page = "30"
+    display_queryset = queryset if per_page == "all" else queryset[:int(per_page)]
+    per_page_options = []
+    for value, label in [("30", "30"), ("50", "50"), ("100", "100"), ("all", "Alle")]:
+        params = request.GET.copy()
+        params["per_page"] = value
+        per_page_options.append({
+            "value": value, "label": label, "url": f"?{params.urlencode()}",
+        })
 
     if request.method == "POST":
         formset = TransactionCategorizationFormSet(
-            request.POST, queryset=queryset, prefix="transactions"
+            request.POST, queryset=display_queryset, prefix="transactions"
         )
         bulk_form = BulkCategorizationForm(request.POST, prefix="bulk")
         action = request.POST.get("action")
@@ -532,7 +540,9 @@ def transaction_overview(request):
                 messages.success(request, "Zuordnungen wurden gespeichert.")
                 return redirect(request.get_full_path())
     else:
-        formset = TransactionCategorizationFormSet(queryset=queryset, prefix="transactions")
+        formset = TransactionCategorizationFormSet(
+            queryset=display_queryset, prefix="transactions"
+        )
         bulk_form = BulkCategorizationForm(prefix="bulk")
 
     report_queryset = queryset.filter(is_internal_transfer=False)
@@ -552,7 +562,12 @@ def transaction_overview(request):
         "formset": formset,
         "bulk_form": bulk_form,
         "totals": totals,
-        "transaction_count": queryset.count(),
+        "transaction_count": transaction_count,
+        "displayed_count": transaction_count if per_page == "all" else min(
+            int(per_page), transaction_count
+        ),
+        "per_page": per_page,
+        "per_page_options": per_page_options,
         "uncategorized_count": queryset.filter(
             category__isnull=True, is_internal_transfer=False
         ).count(),

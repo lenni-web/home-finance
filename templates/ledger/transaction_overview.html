@@ -30,6 +30,8 @@
     button,.button-link { display:inline-block; border:0; border-radius:8px; padding:.7rem 1rem; background:#0f766e; color:white; font:inherit; font-weight:650; text-decoration:none; cursor:pointer; }
     .secondary { background:#334155; }
     .actions { position: sticky; bottom: 0; padding: 1rem; background: rgba(248,250,252,.96); display: flex; justify-content: flex-end; gap: .75rem; }
+    .table-footer { display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-top:1rem; }
+    .table-footer select { width:auto; min-width:85px; }
     .messages { border-left: 4px solid #0f766e; }
     @media (max-width: 800px) { header, .summary, .filters, .bulk-grid { display: block; } .metric { margin-bottom: .7rem; } }
   </style>
@@ -58,7 +60,7 @@
         <td>{{ form.people.errors }}{{ form.people }}</td>
         <td>{{ form.comment.errors }}{{ form.comment }}</td>
       </tr>{% empty %}<tr><td colspan="10">Keine Buchungen für diesen Filter.</td></tr>{% endfor %}
-    </tbody></table></section>
+    </tbody></table><div class="table-footer"><span class="muted">{{ displayed_count }} von {{ transaction_count }} Buchungen angezeigt</span><label>Einträge anzeigen <select onchange="window.location.href=this.value">{% for option in per_page_options %}<option value="{{ option.url }}" {% if option.value == per_page %}selected{% endif %}>{{ option.label }}</option>{% endfor %}</select></label></div></section>
     <div class="actions"><button class="secondary" name="action" value="inline_save">Einzelne Zuordnungen speichern</button></div>
   </form>
 </body></html>
