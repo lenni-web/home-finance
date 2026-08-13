@@ -818,6 +818,16 @@ class CategorizationWorkflowTests(TestCase):
         category = Category.objects.create(name="Lebensmittel")
         self.item.category = category
         self.item.save(update_fields=["category", "updated_at"])
+        for number in range(2):
+            Transaction.objects.create(
+                statement_import=self.statement,
+                booking_date=date(2026, 7, 20 + number),
+                counterparty="Beispielmarkt Berlin",
+                amount="-10.00",
+                category=category,
+                source_fingerprint=f"{900 + number:064x}",
+                reviewed=True,
+            )
         candidate = Transaction.objects.create(
             statement_import=self.statement,
             booking_date=date(2026, 8, 2),
@@ -833,6 +843,64 @@ class CategorizationWorkflowTests(TestCase):
         self.assertEqual(suggestion.category, category)
         self.assertEqual(suggestion.confidence, 100)
         self.assertEqual(suggestion.source, "Bestätigte Buchungen")
+        self.assertEqual(suggestion.sample_count, 3)
+        self.assertContains(
+            self.client.get(reverse("transaction_overview")), "3 Vergleichsbuchungen"
+        )
+
+    def test_learned_suggestion_requires_at_least_three_comparable_transactions(self):
+        category = Category.objects.create(name="Einzelfall")
+        self.item.category = category
+        self.item.save(update_fields=["category", "updated_at"])
+        candidate = Transaction.objects.create(
+            statement_import=self.statement,
+            booking_date=date(2026, 8, 2),
+            counterparty="BEISPIELMARKT BERLIN GMBH",
+            amount="-12.00",
+            source_fingerprint="l" * 64,
+            reviewed=True,
+        )
+
+        self.assertIsNone(categorization_suggestion(candidate))
+
+    def test_payment_intermediary_does_not_learn_from_counterparty_alone(self):
+        category = Category.objects.create(name="Falscher PayPal-Vorschlag")
+        for number in range(3):
+            Transaction.objects.create(
+                statement_import=self.statement,
+                booking_date=date(2026, 7, 20 + number),
+                counterparty="PayPal Europe S.a.r.l. et Cie S.C.A",
+                description=f"Unterschiedlicher Händler {number}",
+                amount="-10.00",
+                category=category,
+                source_fingerprint=f"{950 + number:064x}",
+                reviewed=True,
+            )
+        candidate = Transaction.objects.create(
+            statement_import=self.statement,
+            booking_date=date(2026, 8, 2),
+            counterparty="PayPal Europe S.a.r.l. et Cie S.C.A",
+            description="Noch ein anderer Händler",
+            amount="-12.00",
+            source_fingerprint="p" * 64,
+            reviewed=True,
+        )
+
+        self.assertIsNone(categorization_suggestion(candidate))
+
+    def test_explicit_rule_still_proposes_category_for_payment_intermediary(self):
+        category = Category.objects.create(name="PayPal-Regel")
+        rule = CategorizationRule.objects.create(
+            name="PayPal ausdrücklich", match_text="PayPal Europe", category=category,
+            auto_apply=False,
+        )
+        self.item.counterparty = "PayPal Europe S.a.r.l. et Cie S.C.A"
+        self.item.save(update_fields=["counterparty", "updated_at"])
+
+        suggestion = categorization_suggestion(self.item)
+
+        self.assertEqual(suggestion.category, category)
+        self.assertEqual(suggestion.rule, rule)
 
     def test_higher_priority_rule_wins_and_can_be_edited(self):
         low = CategorizationRule.objects.create(

@@ -11,6 +11,10 @@ PAYMENT_NOISE = {
     "gmbh", "ag", "kg", "se", "ug", "mbh", "de", "deutschland",
     "zahlung", "kartenzahlung", "lastschrift", "visa", "mastercard",
 }
+MIN_LEARNING_SAMPLES = 3
+PAYMENT_INTERMEDIARIES = {
+    "paypal", "klarna", "stripe", "sumup", "mollie", "adyen",
+}
 
 
 def normalize_merchant(value):
@@ -18,6 +22,11 @@ def normalize_merchant(value):
     words = normalize_comparison_text(value).split()
     relevant = [word for word in words if word not in PAYMENT_NOISE and not word.isdigit()]
     return " ".join(relevant[:8])
+
+
+def is_payment_intermediary(value):
+    words = normalize_comparison_text(value).split()
+    return bool(words and words[0] in PAYMENT_INTERMEDIARIES)
 
 
 @dataclass(frozen=True)
@@ -70,13 +79,13 @@ def categorization_suggestion(transaction):
         )
 
     merchant_key = normalize_merchant(transaction.counterparty)
-    if not merchant_key:
+    if not merchant_key or is_payment_intermediary(transaction.counterparty):
         return None
     candidates = Transaction.objects.filter(
         reviewed=True, category__isnull=False
     ).exclude(pk=transaction.pk).select_related("category")
     same_merchant = [item for item in candidates if normalize_merchant(item.counterparty) == merchant_key]
-    if not same_merchant:
+    if len(same_merchant) < MIN_LEARNING_SAMPLES:
         return None
     category_counts = {}
     categories = {}
