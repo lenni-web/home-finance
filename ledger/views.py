@@ -779,6 +779,15 @@ def document_review(request, pk):
         Document.objects.select_related("category").prefetch_related("tags", "people", "transactions"),
         pk=pk,
     )
+    if document.kind == Document.Kind.BANK_STATEMENT:
+        statement = StatementImport.objects.filter(document=document).select_related(
+            "account"
+        ).first()
+        return render(request, "ledger/document_review.html", {
+            "document": document,
+            "statement": statement,
+            "is_bank_statement": True,
+        })
     scored_candidates = scored_document_transaction_candidates(document)
     candidates = document_transaction_candidates(document)
     detail_map = {

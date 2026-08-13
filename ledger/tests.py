@@ -1071,6 +1071,42 @@ Gesamt 12,34 EUR
         self.assertEqual(_parse_total(text), Decimal("12.34"))
         self.assertEqual(_parse_merchant(text), "Musterladen Berlin")
 
+    def test_bank_statement_detail_prioritizes_original_without_transaction_matching(self):
+        account = Account.objects.create(name="Vorschaukonto")
+        document = Document.objects.create(
+            kind=Document.Kind.BANK_STATEMENT,
+            original_filename="kontoauszug-juli.pdf",
+            file=SimpleUploadedFile(
+                "kontoauszug-juli.pdf", b"%PDF-statement-preview", "application/pdf"
+            ),
+            processing_status=Document.ProcessingStatus.PROCESSED,
+        )
+        statement = StatementImport.objects.create(
+            document=document,
+            account=account,
+            status=StatementImport.Status.IMPORTED,
+        )
+        Transaction.objects.create(
+            statement_import=statement,
+            booking_date=date(2026, 7, 1),
+            counterparty="Testbuchung",
+            amount="-10.00",
+            source_fingerprint="b" * 64,
+            reviewed=True,
+        )
+
+        with patch("ledger.views.scored_document_transaction_candidates") as scored:
+            response = self.client.get(reverse("document_review", args=[document.pk]))
+
+        scored.assert_not_called()
+        self.assertContains(response, "Original-Kontoauszug")
+        self.assertContains(response, "Vorschaukonto")
+        self.assertContains(response, "PDF herunterladen")
+        self.assertContains(response, reverse("document_download", args=[document.pk]))
+        self.assertNotContains(response, "Erkannte Angaben")
+        self.assertNotContains(response, "Erkannten Text anzeigen")
+        self.assertNotContains(response, "Passende Kontobewegungen")
+
     @patch("ledger.views.process_document_task.delay")
     def test_receipt_upload_queues_background_task(self, delay):
         with tempfile.TemporaryDirectory() as media_root:
