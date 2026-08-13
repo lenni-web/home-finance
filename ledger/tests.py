@@ -401,8 +401,8 @@ class CategorizationWorkflowTests(TestCase):
         analytics = self.client.get(reverse("analytics"), {"month": "2026-07"})
 
         self.assertContains(dashboard, "0,00 €")
-        self.assertContains(analytics, "Ausgaben gesamt<strong>0,00 €")
-        self.assertContains(analytics, "Enthaltene Buchungen<strong>0")
+        self.assertContains(analytics, "Ausgaben<strong class=\"negative\">0,00 €")
+        self.assertContains(analytics, "Ausgabenbuchungen<strong>0")
 
     def test_transfer_can_remain_marked_until_counterpart_is_imported(self):
         self.item.is_internal_transfer = True
@@ -694,6 +694,65 @@ class CategorizationWorkflowTests(TestCase):
 
         self.assertContains(response, "42,50 €")
         self.assertNotContains(response, "142,50 €")
+
+    def test_annual_analytics_shows_monthly_trend_totals_and_drill_downs(self):
+        category = Category.objects.create(name="Wohnen", color="#336699")
+        self.item.category = category
+        self.item.save(update_fields=["category", "updated_at"])
+        Transaction.objects.create(
+            statement_import=self.statement,
+            booking_date=date(2026, 1, 15),
+            counterparty="Januarausgabe",
+            amount="-100.00",
+            category=category,
+            source_fingerprint="y" * 64,
+            reviewed=True,
+        )
+        Transaction.objects.create(
+            statement_import=self.statement,
+            booking_date=date(2026, 3, 1),
+            counterparty="Einnahme",
+            amount="500.00",
+            source_fingerprint="i" * 64,
+            reviewed=True,
+        )
+        Transaction.objects.create(
+            statement_import=self.statement,
+            booking_date=date(2026, 4, 1),
+            counterparty="Umbuchung",
+            amount="-250.00",
+            source_fingerprint="u" * 64,
+            reviewed=True,
+            is_internal_transfer=True,
+        )
+
+        response = self.client.get(reverse("analytics"), {
+            "period": "year", "year": "2026", "month": "2026-07",
+        })
+
+        self.assertContains(response, "Jahresüberblick 2026")
+        self.assertContains(response, "Monatsverlauf 2026")
+        self.assertContains(response, "142,50 €")
+        self.assertContains(response, "500,00 €")
+        self.assertContains(response, "357,50 €")
+        self.assertNotContains(response, "392,50 €")
+        self.assertContains(response, "?month=2026-01")
+        self.assertContains(response, f"year=2026&amp;category={category.pk}")
+
+    def test_transaction_overview_can_filter_a_whole_year(self):
+        Transaction.objects.create(
+            statement_import=self.statement,
+            booking_date=date(2025, 12, 31),
+            counterparty="Vorjahr",
+            amount="-10.00",
+            source_fingerprint="v" * 64,
+            reviewed=True,
+        )
+
+        response = self.client.get(reverse("transaction_overview"), {"year": "2026"})
+
+        self.assertContains(response, "Beispielmarkt Berlin")
+        self.assertNotContains(response, "Vorjahr")
 
     def test_open_tasks_lists_uncategorized_transactions(self):
         response = self.client.get(reverse("open_tasks"))

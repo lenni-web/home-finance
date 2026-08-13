@@ -257,6 +257,7 @@ TransactionReviewFormSet = modelformset_factory(
 
 class TransactionFilterForm(forms.Form):
     month = forms.CharField(required=False, widget=forms.TextInput(attrs={"type": "month"}))
+    year = forms.IntegerField(required=False, label="Jahr", min_value=2000, max_value=2100)
     account = forms.ModelChoiceField(
         queryset=Account.objects.all(), required=False, empty_label="Alle Konten"
     )
@@ -277,8 +278,21 @@ class TransactionFilterForm(forms.Form):
 
 
 class AnalyticsFilterForm(forms.Form):
+    period = forms.ChoiceField(
+        required=False,
+        label="Zeitraum",
+        choices=[("month", "Monat"), ("year", "Jahr")],
+        initial="month",
+    )
     month = forms.CharField(
         required=False, label="Monat", widget=forms.TextInput(attrs={"type": "month"})
+    )
+    year = forms.IntegerField(
+        required=False,
+        label="Jahr",
+        min_value=2000,
+        max_value=2100,
+        widget=forms.NumberInput(attrs={"step": 1}),
     )
     account = forms.ModelChoiceField(
         queryset=Account.objects.all(), required=False, label="Konto", empty_label="Alle Konten"

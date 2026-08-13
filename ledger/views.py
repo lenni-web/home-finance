@@ -133,7 +133,7 @@ def _open_task_counts():
     }
 
 
-def _chart_items(groups, total, selected_month, account_id, filter_name):
+def _chart_items(groups, total, period_params, account_id, filter_name):
     palette = ["#0f766e", "#2563eb", "#7c3aed", "#db2777", "#ea580c", "#65a30d"]
     items = []
     position = Decimal("0")
@@ -148,7 +148,7 @@ def _chart_items(groups, total, selected_month, account_id, filter_name):
             color = palette[index % len(palette)]
         end = position + percent
         gradient.append(f"{color} {position:.2f}% {end:.2f}%")
-        params = {"month": selected_month}
+        params = dict(period_params)
         if account_id:
             params["account"] = account_id
         if group.get("id") is None:
@@ -170,11 +170,17 @@ def analytics(request):
         "booking_date", flat=True
     ).first()
     fallback = latest_date or date.today()
-    filters = AnalyticsFilterForm(request.GET or {"month": fallback.strftime("%Y-%m")})
+    filters = AnalyticsFilterForm(request.GET or {
+        "period": "month", "month": fallback.strftime("%Y-%m"), "year": fallback.year,
+    })
     selected_month = fallback.strftime("%Y-%m")
+    selected_year = fallback.year
+    period = "month"
     account = None
     if filters.is_valid():
+        period = filters.cleaned_data.get("period") or "month"
         selected_month = filters.cleaned_data.get("month") or selected_month
+        selected_year = filters.cleaned_data.get("year") or selected_year
         account = filters.cleaned_data.get("account")
     try:
         year, month = map(int, selected_month.split("-"))
@@ -182,13 +188,33 @@ def analytics(request):
     except (AttributeError, TypeError, ValueError):
         month_start = date(fallback.year, fallback.month, 1)
         selected_month = month_start.strftime("%Y-%m")
-    month_end = date(month_start.year, month_start.month, monthrange(month_start.year, month_start.month)[1])
-    queryset = Transaction.objects.filter(
-        reviewed=True, amount__lt=0, is_internal_transfer=False,
-        booking_date__range=(month_start, month_end)
-    ).select_related("category", "statement_import__account").prefetch_related("people")
+    if period == "year":
+        period_start = date(selected_year, 1, 1)
+        period_end = date(selected_year, 12, 31)
+        period_params = {"year": selected_year}
+    else:
+        period = "month"
+        period_start = month_start
+        period_end = date(
+            month_start.year, month_start.month,
+            monthrange(month_start.year, month_start.month)[1],
+        )
+        period_params = {"month": selected_month}
+    financial_queryset = Transaction.objects.filter(
+        reviewed=True, is_internal_transfer=False,
+        booking_date__range=(period_start, period_end),
+    )
     if account:
-        queryset = queryset.filter(statement_import__account=account)
+        financial_queryset = financial_queryset.filter(statement_import__account=account)
+    zero = Value(Decimal("0.00"), output_field=DecimalField())
+    totals = financial_queryset.aggregate(
+        income=Coalesce(Sum("amount", filter=Q(amount__gt=0)), zero),
+        expenses=Coalesce(Sum("amount", filter=Q(amount__lt=0)), zero),
+        balance=Coalesce(Sum("amount"), zero),
+    )
+    queryset = financial_queryset.filter(amount__lt=0).select_related(
+        "category", "statement_import__account"
+    ).prefetch_related("people")
     transactions = list(queryset)
     total = sum((abs(item.amount) for item in transactions), Decimal("0"))
 
@@ -218,14 +244,42 @@ def analytics(request):
 
     account_id = account.pk if account else None
     category_items, category_gradient = _chart_items(
-        category_groups.values(), total, selected_month, account_id, "category"
+        category_groups.values(), total, period_params, account_id, "category"
     )
     person_items, person_gradient = _chart_items(
-        person_groups.values(), total, selected_month, account_id, "person"
+        person_groups.values(), total, period_params, account_id, "person"
     )
+    monthly_rows = []
+    if period == "year":
+        monthly_totals = {
+            item["month"].month: item
+            for item in financial_queryset.annotate(month=TruncMonth("booking_date"))
+            .values("month")
+            .annotate(
+                income=Coalesce(Sum("amount", filter=Q(amount__gt=0)), zero),
+                expenses=Coalesce(Sum("amount", filter=Q(amount__lt=0)), zero),
+            )
+        }
+        max_monthly_expenses = max(
+            (abs(item["expenses"]) for item in monthly_totals.values()), default=Decimal("0")
+        )
+        for month_number in range(1, 13):
+            values = monthly_totals.get(month_number, {})
+            expenses = abs(values.get("expenses", Decimal("0")))
+            monthly_rows.append({
+                "date": date(selected_year, month_number, 1),
+                "income": values.get("income", Decimal("0")),
+                "expenses": expenses,
+                "bar_percent": round(expenses / max_monthly_expenses * 100)
+                if max_monthly_expenses else 0,
+                "drill_url": f"?month={selected_year}-{month_number:02d}",
+            })
     return render(request, "ledger/analytics.html", {
         "filters": filters, "selected_month": selected_month, "month_date": month_start,
-        "total": total, "transaction_count": len(transactions),
+        "selected_year": selected_year, "period": period,
+        "period_label": selected_year if period == "year" else month_start,
+        "total": total, "totals": totals, "expenses_absolute": abs(totals["expenses"]),
+        "transaction_count": len(transactions), "monthly_rows": monthly_rows,
         "category_items": category_items, "category_gradient": category_gradient,
         "person_items": person_items, "person_gradient": person_gradient,
     })
@@ -405,6 +459,8 @@ def transaction_overview(request):
                 queryset = queryset.filter(booking_date__year=year, booking_date__month=month)
             except (TypeError, ValueError):
                 filters.add_error("month", "Bitte einen gültigen Monat auswählen.")
+        elif values.get("year"):
+            queryset = queryset.filter(booking_date__year=values["year"])
         if values.get("account"):
             queryset = queryset.filter(statement_import__account=values["account"])
         if values.get("category"):
