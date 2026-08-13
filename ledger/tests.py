@@ -927,6 +927,16 @@ class CategorizationWorkflowTests(TestCase):
         self.assertRedirects(response, reverse("manage_classification"))
         self.assertEqual(low.priority, 300)
 
+    def test_rule_management_offers_direct_open_create_form(self):
+        response = self.client.get(reverse("manage_classification"), {"new": "rule"})
+
+        self.assertContains(response, "＋ Neue Regel anlegen")
+        self.assertContains(
+            response,
+            '<details class="card create-card" id="new-rule" open>',
+        )
+        self.assertContains(response, 'name="rule-match_text"')
+
     def test_rule_can_be_deleted_without_changing_existing_transaction_assignment(self):
         category = Category.objects.create(name="Bleibt zugeordnet")
         self.item.category = category
