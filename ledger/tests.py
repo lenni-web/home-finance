@@ -109,6 +109,7 @@ class AccessControlTests(TestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertEqual(response["X-Frame-Options"], "SAMEORIGIN")
 
     def test_health_endpoint_remains_public(self):
         response = self.client.get(reverse("health"))

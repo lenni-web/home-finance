@@ -18,6 +18,7 @@ from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 
 from .forms import (
     AccountForm, AnalyticsFilterForm, BulkCategorizationForm, CategorizationRuleFilterForm, CategorizationRuleForm, CategoryForm,
@@ -919,6 +920,7 @@ def document_archive(request):
 
 
 @login_required
+@xframe_options_sameorigin
 def document_download(request, pk):
     document = get_object_or_404(Document, pk=pk)
     content_type = mimetypes.guess_type(document.original_filename)[0] or "application/octet-stream"
