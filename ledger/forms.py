@@ -269,6 +269,11 @@ class TransactionFilterForm(forms.Form):
     )
     q = forms.CharField(required=False, label="Suche")
     uncategorized = forms.BooleanField(required=False, label="Nur ohne Kategorie")
+    transfer_status = forms.ChoiceField(
+        required=False,
+        label="Umbuchungen",
+        choices=[("", "Alle Buchungen"), ("internal", "Nur Umbuchungen"), ("open", "Ohne Gegenbuchung")],
+    )
 
 
 class AnalyticsFilterForm(forms.Form):
@@ -283,8 +288,8 @@ class AnalyticsFilterForm(forms.Form):
 class TransactionCategorizationForm(forms.ModelForm):
     class Meta:
         model = Transaction
-        fields = ["category", "tags", "people", "comment"]
-        labels = {"comment": "Kommentar"}
+        fields = ["category", "tags", "people", "comment", "is_internal_transfer"]
+        labels = {"comment": "Kommentar", "is_internal_transfer": "Umbuchung"}
         widgets = {
             "tags": forms.SelectMultiple(attrs={"size": 3}),
             "people": forms.SelectMultiple(attrs={"size": 4}),
@@ -312,6 +317,11 @@ class BulkCategorizationForm(forms.Form):
     people = forms.ModelMultipleChoiceField(
         queryset=Person.objects.filter(active=True), required=False,
         widget=forms.SelectMultiple(attrs={"size": 4}),
+    )
+    transfer_action = forms.ChoiceField(
+        required=False,
+        label="Interne Umbuchung",
+        choices=[("", "Nicht ändern"), ("mark", "Als Umbuchung markieren"), ("unmark", "Markierung aufheben")],
     )
     create_rules = forms.BooleanField(
         required=False, label="Für ausgewählte Zahlungspartner Regeln anlegen"
@@ -346,7 +356,8 @@ class CategorizationRuleForm(forms.ModelForm):
     class Meta:
         model = CategorizationRule
         fields = [
-            "name", "match_text", "priority", "category", "tags", "people", "auto_apply"
+            "name", "match_text", "priority", "category", "tags", "people",
+            "marks_internal_transfer", "auto_apply",
         ]
         labels = {"priority": "Priorität (höher wird zuerst geprüft)"}
 

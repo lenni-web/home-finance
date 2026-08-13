@@ -216,6 +216,19 @@ class Transaction(TimestampedModel):
     people = models.ManyToManyField(Person, blank=True, related_name="transactions")
     documents = models.ManyToManyField(Document, blank=True, related_name="transactions")
     reviewed = models.BooleanField(default=False)
+    is_internal_transfer = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name="Interne Umbuchung",
+    )
+    transfer_counterpart = models.OneToOneField(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="transfer_reverse",
+        verbose_name="Gegenbuchung",
+    )
 
     class Meta:
         ordering = ["-booking_date", "-id"]
@@ -231,6 +244,10 @@ class CategorizationRule(TimestampedModel):
     tags = models.ManyToManyField(Tag, blank=True, related_name="categorization_rules")
     people = models.ManyToManyField(Person, blank=True, related_name="categorization_rules")
     auto_apply = models.BooleanField(default=True)
+    marks_internal_transfer = models.BooleanField(
+        default=False,
+        verbose_name="Als interne Umbuchung kennzeichnen",
+    )
     active = models.BooleanField(default=True)
     times_applied = models.PositiveIntegerField(default=0)
     priority = models.PositiveIntegerField(

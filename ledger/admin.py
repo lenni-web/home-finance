@@ -19,9 +19,10 @@ class DocumentAdmin(admin.ModelAdmin):
 @admin.register(Transaction)
 class TransactionAdmin(admin.ModelAdmin):
     list_display = (
-        "booking_date", "booking_type", "counterparty", "amount", "category", "reviewed"
+        "booking_date", "booking_type", "counterparty", "amount", "category",
+        "is_internal_transfer", "reviewed",
     )
-    list_filter = ("reviewed", "category", "tags", "people")
+    list_filter = ("reviewed", "is_internal_transfer", "category", "tags", "people")
     search_fields = ("counterparty", "description", "comment")
     date_hierarchy = "booking_date"
 

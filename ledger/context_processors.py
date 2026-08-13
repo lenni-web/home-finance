@@ -16,5 +16,7 @@ def navigation_status(request):
         Q(status=StatementImport.Status.REVIEW)
         | Q(reconciliation_status=StatementImport.ReconciliationStatus.MISMATCH)
     ).distinct().count()
-    uncategorized = Transaction.objects.filter(reviewed=True, category=None).count()
+    uncategorized = Transaction.objects.filter(
+        reviewed=True, category=None, is_internal_transfer=False
+    ).count()
     return {"navigation_task_count": document_tasks + statement_tasks + uncategorized}

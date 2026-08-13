@@ -24,6 +24,8 @@
     .negative { color: #b91c1c; } .positive { color: #047857; }
     .muted { color: #64748b; font-size: .82rem; }
     .suggestion { display: block; margin-top: .35rem; color: #7c3aed; font-size: .78rem; }
+    .transfer { display:block; margin-top:.45rem; padding:.45rem; border-radius:8px; background:#e0f2fe; color:#075985; font-size:.8rem; }
+    .transfer button { padding:.35rem .5rem; margin-top:.35rem; background:#0369a1; font-size:.78rem; }
     .bulk-grid > p { flex: 1; margin: 0; } .bulk-grid > p:first-child { flex: 1.3; }
     button,.button-link { display:inline-block; border:0; border-radius:8px; padding:.7rem 1rem; background:#0f766e; color:white; font:inherit; font-weight:650; text-decoration:none; cursor:pointer; }
     .secondary { background:#334155; }
@@ -33,7 +35,7 @@
   </style>
 </head>
 <body>
-  <header class="app-page-header"><div class="app-page-heading"><h1>Buchungen</h1><p>{{ transaction_count }} Buchungen, davon {{ uncategorized_count }} ohne Kategorie</p></div>{% include "ledger/_navigation.html" %}</header>
+  <header class="app-page-header"><div class="app-page-heading"><h1>Buchungen</h1><p>{{ transaction_count }} Buchungen, davon {{ uncategorized_count }} ohne Kategorie und {{ transfer_count }} interne Umbuchungen</p></div>{% include "ledger/_navigation.html" %}</header>
   {% for message in messages %}<div class="card messages">{{ message }}</div>{% endfor %}
   <section class="summary">
     <div class="card metric">Einnahmen<strong class="positive">{{ totals.income|money }} €</strong></div>
@@ -43,18 +45,19 @@
   <section class="card"><form method="get"><div class="filters">{{ filters.as_p }}</div><p><button>Filter anwenden</button> <a class="button-link secondary" href="{% url 'transaction_overview' %}">Zurücksetzen</a></p></form></section>
   <form method="post">{% csrf_token %}{{ formset.management_form }}{{ formset.non_form_errors }}
     <section class="card"><h2>Auswahl gemeinsam bearbeiten</h2><div class="bulk-grid">{{ bulk_form.as_p }}</div><p><button name="action" value="bulk">Auf markierte Buchungen anwenden</button></p></section>
-    <section class="card table-wrap"><table><thead><tr><th><input class="selection-checkbox" type="checkbox" aria-label="Alle auswählen" onclick="document.querySelectorAll('[name=selected]').forEach(x => x.checked=this.checked)"></th><th>Datum</th><th>Konto</th><th>Zahlungspartner / Zweck</th><th>Betrag</th><th>Kategorie</th><th>Tags</th><th>Personen</th><th>Kommentar</th></tr></thead><tbody>
+    <section class="card table-wrap"><table><thead><tr><th><input class="selection-checkbox" type="checkbox" aria-label="Alle auswählen" onclick="document.querySelectorAll('[name=selected]').forEach(x => x.checked=this.checked)"></th><th>Datum</th><th>Konto</th><th>Zahlungspartner / Zweck</th><th>Betrag</th><th>Umbuchung</th><th>Kategorie</th><th>Tags</th><th>Personen</th><th>Kommentar</th></tr></thead><tbody>
       {% for form in formset %}<tr>
         <td><input class="selection-checkbox" type="checkbox" name="selected" value="{{ form.instance.pk }}" aria-label="Buchung auswählen">{{ form.id }}</td>
         <td>{{ form.instance.booking_date|date:"d.m.Y" }}<div class="muted">Valuta {{ form.instance.value_date|date:"d.m.Y" }}</div></td>
         <td>{{ form.instance.statement_import.account }}</td>
-        <td><strong>{{ form.instance.counterparty|default:form.instance.booking_type }}</strong><div class="muted">{{ form.instance.description|linebreaksbr|truncatechars:220 }}</div>{% if form.instance.rule_suggestion %}<span class="suggestion">Vorschlag: {{ form.instance.rule_suggestion.category|default:"Zuordnung" }} · {{ form.instance.rule_suggestion.confidence }} % sicher · {{ form.instance.rule_suggestion.source }}</span>{% endif %}</td>
+        <td><strong>{{ form.instance.counterparty|default:form.instance.booking_type }}</strong><div class="muted">{{ form.instance.description|linebreaksbr|truncatechars:220 }}</div>{% if form.instance.rule_suggestion %}<span class="suggestion">Vorschlag: {{ form.instance.rule_suggestion.category|default:"Zuordnung" }} · {{ form.instance.rule_suggestion.confidence }} % sicher · {{ form.instance.rule_suggestion.source }}</span>{% endif %}{% if form.instance.transfer_counterpart %}<span class="transfer">Verknüpft mit {{ form.instance.transfer_counterpart.statement_import.account }} · {{ form.instance.transfer_counterpart.booking_date|date:"d.m.Y" }} · {{ form.instance.transfer_counterpart.amount|money }} €</span>{% elif form.instance.transfer_suggestion %}<span class="transfer">Mögliche Gegenbuchung: {{ form.instance.transfer_suggestion.statement_import.account }} · {{ form.instance.transfer_suggestion.booking_date|date:"d.m.Y" }} · {{ form.instance.transfer_suggestion.amount|money }} €<button name="action" value="confirm_transfer:{{ form.instance.pk }}:{{ form.instance.transfer_suggestion.pk }}">Paar bestätigen</button></span>{% elif form.instance.is_internal_transfer %}<span class="transfer">Als Umbuchung markiert – Gegenbuchung noch nicht vorhanden.</span>{% endif %}</td>
         <td class="number {% if form.instance.amount < 0 %}negative{% else %}positive{% endif %}">{{ form.instance.amount|money }} €</td>
+        <td>{{ form.is_internal_transfer.errors }}{{ form.is_internal_transfer }}</td>
         <td>{{ form.category.errors }}{{ form.category }}</td>
         <td>{{ form.tags.errors }}{{ form.tags }}</td>
         <td>{{ form.people.errors }}{{ form.people }}</td>
         <td>{{ form.comment.errors }}{{ form.comment }}</td>
-      </tr>{% empty %}<tr><td colspan="9">Keine Buchungen für diesen Filter.</td></tr>{% endfor %}
+      </tr>{% empty %}<tr><td colspan="10">Keine Buchungen für diesen Filter.</td></tr>{% endfor %}
     </tbody></table></section>
     <div class="actions"><button class="secondary" name="action" value="inline_save">Einzelne Zuordnungen speichern</button></div>
   </form>

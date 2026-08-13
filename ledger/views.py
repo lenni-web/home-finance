@@ -29,6 +29,7 @@ from .document_matching import (
     scored_document_transaction_candidates,
 )
 from .importers import INGStatementParser
+from .internal_transfers import best_transfer_candidate, link_transfer_pair, unlink_transfer
 from .models import (
     Account, BackupRecord, CategorizationRule, Category, Document, EmailImportConfig,
     EmailImportMessage, Person, ServiceHeartbeat, StatementImport, Tag, Transaction,
@@ -68,10 +69,10 @@ def dashboard(request):
 
     current = Transaction.objects.filter(
         reviewed=True, booking_date__range=(month_start, month_end)
-    )
+    ).filter(is_internal_transfer=False)
     previous = Transaction.objects.filter(
         reviewed=True, booking_date__range=(previous_start, previous_end)
-    )
+    ).filter(is_internal_transfer=False)
     zero = Value(Decimal("0.00"), output_field=DecimalField())
     totals = current.aggregate(
         income=Coalesce(Sum("amount", filter=Q(amount__gt=0)), zero),
@@ -123,7 +124,9 @@ def _open_task_counts():
             processing_status=Document.ProcessingStatus.REVIEW
         ).exclude(kind=Document.Kind.BANK_STATEMENT).count(),
         "failed": Document.objects.filter(processing_status=Document.ProcessingStatus.FAILED).count(),
-        "uncategorized": Transaction.objects.filter(reviewed=True, category__isnull=True).count(),
+        "uncategorized": Transaction.objects.filter(
+            reviewed=True, category__isnull=True, is_internal_transfer=False
+        ).count(),
         "mismatches": StatementImport.objects.filter(
             reconciliation_status=StatementImport.ReconciliationStatus.MISMATCH
         ).count(),
@@ -181,7 +184,8 @@ def analytics(request):
         selected_month = month_start.strftime("%Y-%m")
     month_end = date(month_start.year, month_start.month, monthrange(month_start.year, month_start.month)[1])
     queryset = Transaction.objects.filter(
-        reviewed=True, amount__lt=0, booking_date__range=(month_start, month_end)
+        reviewed=True, amount__lt=0, is_internal_transfer=False,
+        booking_date__range=(month_start, month_end)
     ).select_related("category", "statement_import__account").prefetch_related("people")
     if account:
         queryset = queryset.filter(statement_import__account=account)
@@ -241,7 +245,9 @@ def open_tasks(request):
         "mismatches": StatementImport.objects.filter(
             reconciliation_status=StatementImport.ReconciliationStatus.MISMATCH
         ).select_related("account", "document"),
-        "uncategorized": Transaction.objects.filter(reviewed=True, category__isnull=True)
+        "uncategorized": Transaction.objects.filter(
+            reviewed=True, category__isnull=True, is_internal_transfer=False
+        )
             .select_related("statement_import__account"),
     })
 
@@ -383,7 +389,10 @@ def statement_review(request, pk):
 def transaction_overview(request):
     queryset = (
         Transaction.objects.filter(reviewed=True)
-        .select_related("category", "statement_import__account")
+        .select_related(
+            "category", "statement_import__account",
+            "transfer_counterpart__statement_import__account",
+        )
         .prefetch_related("tags", "people")
         .order_by("-booking_date", "-id")
     )
@@ -405,7 +414,11 @@ def transaction_overview(request):
         if values.get("person"):
             queryset = queryset.filter(people=values["person"])
         if values.get("uncategorized"):
-            queryset = queryset.filter(category__isnull=True)
+            queryset = queryset.filter(category__isnull=True, is_internal_transfer=False)
+        if values.get("transfer_status") == "internal":
+            queryset = queryset.filter(is_internal_transfer=True)
+        elif values.get("transfer_status") == "open":
+            queryset = queryset.filter(is_internal_transfer=True, transfer_counterpart__isnull=True)
         if values.get("q"):
             queryset = queryset.filter(
                 Q(counterparty__icontains=values["q"])
@@ -420,8 +433,23 @@ def transaction_overview(request):
         )
         bulk_form = BulkCategorizationForm(request.POST, prefix="bulk")
         action = request.POST.get("action")
+        if action and action.startswith("confirm_transfer:"):
+            try:
+                first_id, second_id = map(int, action.split(":")[1:])
+                first = queryset.get(pk=first_id)
+                second = Transaction.objects.select_related("statement_import__account").get(
+                    pk=second_id, reviewed=True
+                )
+                link_transfer_pair(first, second)
+                messages.success(request, "Die beiden Buchungen wurden als Umbuchung verknüpft.")
+            except (ValueError, Transaction.DoesNotExist):
+                messages.error(request, "Dieses Umbuchungspaar ist nicht mehr gültig.")
+            return redirect(request.get_full_path())
         if formset.is_valid() and bulk_form.is_valid():
             formset.save()
+            for form in formset.forms:
+                if "is_internal_transfer" in form.changed_data and not form.instance.is_internal_transfer:
+                    unlink_transfer(form.instance)
             if action == "bulk":
                 selected_ids = request.POST.getlist("selected")
                 selected = queryset.filter(pk__in=selected_ids)
@@ -433,6 +461,11 @@ def transaction_overview(request):
                         if bulk.get("category"):
                             item.category = bulk["category"]
                             item.save(update_fields=["category", "updated_at"])
+                        if bulk.get("transfer_action") == "mark":
+                            item.is_internal_transfer = True
+                            item.save(update_fields=["is_internal_transfer", "updated_at"])
+                        elif bulk.get("transfer_action") == "unmark":
+                            unlink_transfer(item)
                         item.tags.add(*bulk["tags"])
                         item.people.add(*bulk["people"])
                     if bulk.get("create_rules"):
@@ -446,20 +479,28 @@ def transaction_overview(request):
         formset = TransactionCategorizationFormSet(queryset=queryset, prefix="transactions")
         bulk_form = BulkCategorizationForm(prefix="bulk")
 
-    totals = queryset.aggregate(
+    report_queryset = queryset.filter(is_internal_transfer=False)
+    totals = report_queryset.aggregate(
         income=Sum("amount", filter=Q(amount__gt=0), default=0),
         expenses=Sum("amount", filter=Q(amount__lt=0), default=0),
         balance=Sum("amount", default=0),
     )
     for form in formset.forms:
         form.instance.rule_suggestion = categorization_suggestion(form.instance)
+        form.instance.transfer_suggestion = (
+            None if form.instance.transfer_counterpart_id
+            else best_transfer_candidate(form.instance)
+        )
     return render(request, "ledger/transaction_overview.html", {
         "filters": filters,
         "formset": formset,
         "bulk_form": bulk_form,
         "totals": totals,
         "transaction_count": queryset.count(),
-        "uncategorized_count": queryset.filter(category__isnull=True).count(),
+        "uncategorized_count": queryset.filter(
+            category__isnull=True, is_internal_transfer=False
+        ).count(),
+        "transfer_count": queryset.filter(is_internal_transfer=True).count(),
     })
 
 
@@ -474,12 +515,18 @@ def _create_rules_from_transactions(transactions, bulk):
                 name=f"{match_text} zuordnen"[:160],
                 match_text=match_text[:255],
                 category=bulk.get("category"),
+                marks_internal_transfer=bulk.get("transfer_action") == "mark",
                 auto_apply=bulk.get("auto_apply", False),
             )
-        elif bulk.get("category"):
-            rule.category = bulk["category"]
+        elif bulk.get("category") or bulk.get("transfer_action") == "mark":
+            if bulk.get("category"):
+                rule.category = bulk["category"]
+            if bulk.get("transfer_action") == "mark":
+                rule.marks_internal_transfer = True
             rule.auto_apply = bulk.get("auto_apply", False)
-            rule.save(update_fields=["category", "auto_apply", "updated_at"])
+            rule.save(update_fields=[
+                "category", "marks_internal_transfer", "auto_apply", "updated_at"
+            ])
         rule.tags.add(*bulk["tags"])
         rule.people.add(*bulk["people"])
 

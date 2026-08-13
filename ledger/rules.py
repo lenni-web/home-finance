@@ -40,6 +40,7 @@ class RuleApplication:
     category: object
     tag_ids: set
     person_ids: set
+    marks_internal_transfer: bool = False
 
     @property
     def rule_names(self):
@@ -99,6 +100,9 @@ def apply_categorization_rules(transaction):
         if rule.category_id and not transaction.category_id:
             transaction.category = rule.category
             changed_fields.append("category")
+        if rule.marks_internal_transfer and not transaction.is_internal_transfer:
+            transaction.is_internal_transfer = True
+            changed_fields.append("is_internal_transfer")
         if changed_fields:
             transaction.save(update_fields=changed_fields + ["updated_at"])
         transaction.tags.add(*rule.tags.all())
@@ -130,14 +134,18 @@ def build_rule_application_plan(scope="uncategorized"):
         category = next((rule.category for rule in matches if rule.category_id), None)
         tag_ids = {tag.pk for rule in matches for tag in rule.tags.all()}
         person_ids = {person.pk for rule in matches for person in rule.people.all()}
+        marks_internal_transfer = any(rule.marks_internal_transfer for rule in matches)
         existing_tag_ids = {tag.pk for tag in item.tags.all()}
         existing_person_ids = {person.pk for person in item.people.all()}
         if (
             (category and category.pk != item.category_id)
             or not tag_ids.issubset(existing_tag_ids)
             or not person_ids.issubset(existing_person_ids)
+            or (marks_internal_transfer and not item.is_internal_transfer)
         ):
-            plan.append(RuleApplication(item, matches, category, tag_ids, person_ids))
+            plan.append(RuleApplication(
+                item, matches, category, tag_ids, person_ids, marks_internal_transfer
+            ))
     return plan
 
 
@@ -148,6 +156,9 @@ def apply_rule_application_plan(plan):
             if application.category and item.category_id != application.category.pk:
                 item.category = application.category
                 item.save(update_fields=["category", "updated_at"])
+            if application.marks_internal_transfer and not item.is_internal_transfer:
+                item.is_internal_transfer = True
+                item.save(update_fields=["is_internal_transfer", "updated_at"])
             if application.tag_ids:
                 item.tags.add(*application.tag_ids)
             if application.person_ids:

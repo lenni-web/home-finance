@@ -18,6 +18,7 @@ from .document_processing import (
 )
 from .document_matching import auto_match_document, refresh_unmatched_document_reviews
 from .importers import ParsedStatement, ParsedTransaction
+from .internal_transfers import best_transfer_candidate, link_transfer_pair, unlink_transfer
 from .models import (
     Account, BackupRecord, CategorizationRule, Category, Document, EmailImportConfig,
     EmailImportMessage, Person, ServiceHeartbeat, StatementImport, Tag, Transaction,
@@ -349,6 +350,95 @@ class CategorizationWorkflowTests(TestCase):
 
         self.assertContains(response, "Beispielmarkt Berlin")
         self.assertContains(response, "-42,50")
+
+    def _create_transfer_counterpart(self):
+        other_account = Account.objects.create(name="Tagesgeld")
+        other_document = Document.objects.create(
+            kind=Document.Kind.BANK_STATEMENT,
+            original_filename="other-statement.pdf",
+            file=SimpleUploadedFile("other-statement.pdf", b"%PDF-other", "application/pdf"),
+        )
+        other_statement = StatementImport.objects.create(
+            document=other_document,
+            account=other_account,
+            status=StatementImport.Status.IMPORTED,
+        )
+        return Transaction.objects.create(
+            statement_import=other_statement,
+            booking_date=date(2026, 7, 11),
+            counterparty="Eigenes Girokonto",
+            amount="42.50",
+            source_fingerprint="t" * 64,
+            reviewed=True,
+        )
+
+    def test_transfer_candidate_requires_opposite_amount_and_another_account(self):
+        counterpart = self._create_transfer_counterpart()
+
+        self.assertEqual(best_transfer_candidate(self.item), counterpart)
+
+    def test_suggested_transfer_pair_can_be_confirmed_in_overview(self):
+        counterpart = self._create_transfer_counterpart()
+        response = self.client.get(reverse("transaction_overview"))
+        self.assertContains(response, "Mögliche Gegenbuchung")
+
+        response = self.client.post(reverse("transaction_overview"), {
+            "action": f"confirm_transfer:{self.item.pk}:{counterpart.pk}",
+        })
+
+        self.assertRedirects(response, reverse("transaction_overview"))
+        self.item.refresh_from_db()
+        counterpart.refresh_from_db()
+        self.assertTrue(self.item.is_internal_transfer)
+        self.assertEqual(self.item.transfer_counterpart, counterpart)
+        self.assertEqual(counterpart.transfer_counterpart, self.item)
+
+    def test_internal_transfers_are_excluded_from_dashboard_and_analytics_totals(self):
+        counterpart = self._create_transfer_counterpart()
+        link_transfer_pair(self.item, counterpart)
+
+        dashboard = self.client.get(reverse("dashboard"), {"month": "2026-07"})
+        analytics = self.client.get(reverse("analytics"), {"month": "2026-07"})
+
+        self.assertContains(dashboard, "0,00 €")
+        self.assertContains(analytics, "Ausgaben gesamt<strong>0,00 €")
+        self.assertContains(analytics, "Enthaltene Buchungen<strong>0")
+
+    def test_transfer_can_remain_marked_until_counterpart_is_imported(self):
+        self.item.is_internal_transfer = True
+        self.item.save(update_fields=["is_internal_transfer", "updated_at"])
+
+        response = self.client.get(reverse("transaction_overview"), {"transfer_status": "open"})
+
+        self.assertContains(response, "Gegenbuchung noch nicht vorhanden")
+
+    def test_unlinking_transfer_clears_both_sides(self):
+        counterpart = self._create_transfer_counterpart()
+        link_transfer_pair(self.item, counterpart)
+
+        unlink_transfer(self.item)
+
+        self.item.refresh_from_db()
+        counterpart.refresh_from_db()
+        self.assertFalse(self.item.is_internal_transfer)
+        self.assertFalse(counterpart.is_internal_transfer)
+        self.assertIsNone(self.item.transfer_counterpart)
+        self.assertIsNone(counterpart.transfer_counterpart)
+
+    def test_automatic_rule_can_mark_internal_transfer(self):
+        rule = CategorizationRule.objects.create(
+            name="Eigenübertrag",
+            match_text="Beispielmarkt",
+            marks_internal_transfer=True,
+            auto_apply=True,
+        )
+
+        apply_categorization_rules(self.item)
+
+        self.item.refresh_from_db()
+        rule.refresh_from_db()
+        self.assertTrue(self.item.is_internal_transfer)
+        self.assertEqual(rule.times_applied, 1)
 
     def test_people_selects_show_at_least_four_entries(self):
         response = self.client.get(reverse("transaction_overview"))
