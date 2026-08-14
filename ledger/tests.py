@@ -458,6 +458,22 @@ class CategorizationWorkflowTests(TestCase):
         self.assertContains(response, 'name="transactions-0-people" size="4"')
         self.assertContains(response, 'name="bulk-people" size="4"')
 
+    def test_categories_are_alphabetical_in_lists_and_select_fields(self):
+        Category.objects.create(name="Wohnen")
+        renamed = Category.objects.create(name="Zwischenablage")
+        Category.objects.create(name="Auto")
+        renamed.name = "Bildung"
+        renamed.save(update_fields=["name", "updated_at"])
+
+        self.assertEqual(
+            list(Category.objects.values_list("name", flat=True)),
+            ["Auto", "Bildung", "Wohnen"],
+        )
+        response = self.client.get(reverse("transaction_overview"))
+        content = response.content.decode()
+        self.assertLess(content.index(">Auto</option>"), content.index(">Bildung</option>"))
+        self.assertLess(content.index(">Bildung</option>"), content.index(">Wohnen</option>"))
+
     def test_transaction_comment_can_be_saved_and_searched(self):
         response = self.client.post(reverse("transaction_overview"), {
             "transactions-TOTAL_FORMS": "1",
