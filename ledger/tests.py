@@ -1573,6 +1573,41 @@ Total 12,00 EUR
         self.assertContains(response, matching.title)
         self.assertNotContains(response, "Andere Rechnung")
 
+    def test_archive_paginates_each_month_independently_by_ten(self):
+        titles = ["Ältestes-A", "Ältestes-B", *[f"Neues-{number:02d}" for number in range(10)]]
+        for number, title in enumerate(titles):
+            Document.objects.create(
+                kind=Document.Kind.INVOICE,
+                title=title,
+                original_filename=f"archive-{number}.pdf",
+                document_date=date(2026, 8, 3),
+                file=SimpleUploadedFile(
+                    f"archive-{number}.pdf", f"%PDF-archive-{number}".encode(), "application/pdf"
+                ),
+            )
+        Document.objects.create(
+            kind=Document.Kind.INVOICE,
+            title="Juli-Dokument",
+            original_filename="archive-july.pdf",
+            document_date=date(2026, 7, 3),
+            file=SimpleUploadedFile("archive-july.pdf", b"%PDF-archive-july", "application/pdf"),
+        )
+
+        first_page = self.client.get(reverse("document_archive"))
+
+        august_group = next(group for group in first_page.context["archive_groups"] if group["key"] == "2026_08")
+        july_group = next(group for group in first_page.context["archive_groups"] if group["key"] == "2026_07")
+        self.assertEqual(len(august_group["page"].object_list), 10)
+        self.assertEqual(len(july_group["page"].object_list), 1)
+        self.assertContains(first_page, "page_2026_08=2")
+        self.assertNotContains(first_page, "Ältestes-A")
+
+        second_page = self.client.get(reverse("document_archive"), {"page_2026_08": "2"})
+
+        self.assertContains(second_page, "Ältestes-A")
+        self.assertContains(second_page, "Ältestes-B")
+        self.assertContains(second_page, "Juli-Dokument")
+
     def test_document_review_explains_match_confidence(self):
         account = Account.objects.create(name="Erklärtes Matching")
         statement_document = Document.objects.create(

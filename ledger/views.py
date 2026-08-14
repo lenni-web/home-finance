@@ -920,13 +920,57 @@ def document_archive(request):
                 | Q(original_filename__icontains=values["q"])
                 | Q(extracted_text__icontains=values["q"])
             )
-    documents = list(queryset.distinct())
-    for document in documents:
-        document.archive_month = (
+    grouped_documents = {}
+    for document in queryset.distinct():
+        month_label = (
             document.document_date.strftime("%m/%Y") if document.document_date else "Ohne Datum"
         )
+        month_key = (
+            document.document_date.strftime("%Y_%m") if document.document_date else "undated"
+        )
+        group = grouped_documents.setdefault(month_key, {
+            "key": month_key, "label": month_label, "documents": [],
+        })
+        group["documents"].append(document)
+    archive_groups = []
+    for group in grouped_documents.values():
+        paginator = Paginator(group["documents"], 10)
+        parameter = f"page_{group['key']}"
+        page = paginator.get_page(request.GET.get(parameter, 1))
+        pagination_links = []
+        if paginator.num_pages > 1:
+            for page_number in paginator.get_elided_page_range(
+                page.number, on_each_side=2, on_ends=1
+            ):
+                if page_number == paginator.ELLIPSIS:
+                    pagination_links.append({"ellipsis": True})
+                    continue
+                params = request.GET.copy()
+                params[parameter] = page_number
+                pagination_links.append({
+                    "number": page_number,
+                    "current": page_number == page.number,
+                    "url": f"?{params.urlencode()}",
+                })
+        previous_url = next_url = ""
+        if page.has_previous():
+            params = request.GET.copy()
+            params[parameter] = page.previous_page_number()
+            previous_url = f"?{params.urlencode()}"
+        if page.has_next():
+            params = request.GET.copy()
+            params[parameter] = page.next_page_number()
+            next_url = f"?{params.urlencode()}"
+        group.update({
+            "page": page,
+            "total": paginator.count,
+            "pagination_links": pagination_links,
+            "previous_url": previous_url,
+            "next_url": next_url,
+        })
+        archive_groups.append(group)
     return render(request, "ledger/document_archive.html", {
-        "documents": documents,
+        "archive_groups": archive_groups,
         "filters": filters,
     })
 
