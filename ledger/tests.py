@@ -14,7 +14,8 @@ from django.template import Context, Template
 from django.urls import reverse
 
 from .document_processing import (
-    _ocr_receipt_quality, _parse_date, _parse_invoice_number, _parse_merchant, _parse_total,
+    ExtractedContent, OCRWord, _merchant_analysis, _ocr_receipt_quality, _parse_date,
+    _parse_invoice_number, _parse_merchant, _parse_total,
 )
 from .document_matching import auto_match_document, refresh_unmatched_document_reviews
 from .importers import ParsedStatement, ParsedTransaction
@@ -1153,6 +1154,45 @@ Total 12,00 EUR
 """
 
         self.assertEqual(_parse_merchant(text), "Example Software Ltd")
+
+    def test_extracts_abbreviated_english_date_with_comma(self):
+        self.assertEqual(_parse_date("Invoice date: 14 Aug, 2026"), date(2026, 8, 14))
+
+    def test_layout_prefers_company_below_biller_over_recipient(self):
+        words = (
+            OCRWord("Rechnungsempfänger", 95, 20, 20, 180, 20, (1, 1, 1, 1)),
+            OCRWord("Lennart", 94, 20, 60, 70, 20, (1, 1, 1, 2)),
+            OCRWord("Barfod", 94, 95, 60, 70, 20, (1, 1, 1, 2)),
+            OCRWord("In", 96, 500, 200, 20, 20, (1, 2, 1, 1)),
+            OCRWord("Rechnung", 96, 525, 200, 90, 20, (1, 2, 1, 1)),
+            OCRWord("gestellt", 96, 620, 200, 70, 20, (1, 2, 1, 1)),
+            OCRWord("von", 96, 695, 200, 35, 20, (1, 2, 1, 1)),
+            OCRWord("Faithlife", 93, 500, 245, 90, 20, (1, 2, 1, 2)),
+            OCRWord("LLC", 93, 595, 245, 35, 20, (1, 2, 1, 2)),
+        )
+        content = ExtractedContent(
+            "Rechnungsempfänger\nLennart Barfod\nIn Rechnung gestellt von\nFaithlife LLC",
+            "image-ocr", "grayscale/psm-11", words,
+        )
+
+        merchant, confidence, reasons = _merchant_analysis(content)
+
+        self.assertEqual(merchant, "Faithlife LLC")
+        self.assertGreaterEqual(confidence, 90)
+        self.assertIn("räumlich beim Feld für den Rechnungssteller", reasons)
+
+    def test_layout_does_not_treat_weight_or_product_text_as_company(self):
+        words = (
+            OCRWord("BIRNEN", 92, 20, 200, 80, 20, (1, 1, 1, 1)),
+            OCRWord("KG-WARE", 92, 105, 200, 80, 20, (1, 1, 1, 1)),
+            OCRWord("1,55", 92, 300, 200, 40, 20, (1, 1, 1, 1)),
+        )
+        content = ExtractedContent("ALDI\nBIRNEN KG-WARE 1,55", "image-ocr", words=words)
+
+        merchant, confidence, _reasons = _merchant_analysis(content)
+
+        self.assertEqual(merchant, "ALDI")
+        self.assertEqual(confidence, 90)
 
     @patch("ledger.views.process_document_task.delay")
     def test_retry_clears_incorrect_extracted_fields_before_reanalysis(self, delay):

@@ -19,6 +19,9 @@
     .secondary { background:#475569; } .error { color:#b91c1c; white-space:pre-wrap; }
     .confidence { display:grid; grid-template-columns:repeat(2,1fr); gap:.45rem; margin:.8rem 0; }
     .confidence span { padding:.45rem .6rem; border-radius:8px; background:#f1f5f9; color:#475569; font-size:.84rem; }
+    .extraction-log { margin:.8rem 0; padding:.8rem 1rem; border-radius:10px; background:#f8fafc; color:#475569; }
+    .extraction-log summary { cursor:pointer; font-weight:700; }
+    .extraction-log ul { margin:.6rem 0 0; padding-left:1.2rem; list-style:disc; }
     pre { white-space:pre-wrap; max-height:300px; overflow:auto; background:#f8fafc; padding:1rem; }
     .statement-preview iframe { height:calc(100vh - 230px); min-height:720px; }
     .meta-list { display:grid; gap:.8rem; margin:1rem 0; }
@@ -39,7 +42,7 @@
   </div>
   {% else %}<div class="grid">
     <section class="card"><h2>Original</h2>{% if document.file.name|lower|slice:"-4:" == ".pdf" %}<iframe src="{% url 'document_download' document.pk %}" title="Dokumentvorschau"></iframe>{% else %}<img class="image-preview" src="{% url 'document_download' document.pk %}" alt="Dokumentvorschau">{% endif %}<p><a class="button-link" href="{% url 'document_download' document.pk %}?download=1">Original herunterladen</a></p></section>
-    <section class="card"><h2>Erkannte Angaben</h2>{% if extraction_confidence %}<div class="confidence"><span>Datum: {{ extraction_confidence.document_date|default:0 }} %</span><span>Händler: {{ extraction_confidence.merchant|default:0 }} %</span><span>Betrag: {{ extraction_confidence.total_amount|default:0 }} %</span><span>Rechnungsnummer: {{ extraction_confidence.invoice_number|default:0 }} %</span></div>{% endif %}<form method="post">{% csrf_token %}{{ review_form.as_p }}{{ link_form.as_p }}<button name="action" value="save">Speichern und abschließen</button>{% if document.kind != "bank_statement" %} <button class="secondary" name="action" value="retry">Erneut analysieren</button>{% endif %}</form></section>
+    <section class="card"><h2>Erkannte Angaben</h2>{% if extraction_confidence %}<div class="confidence"><span>Datum: {{ extraction_confidence.document_date|default:0 }} %</span><span>Händler: {{ extraction_confidence.merchant|default:0 }} %</span><span>Betrag: {{ extraction_confidence.total_amount|default:0 }} %</span><span>Rechnungsnummer: {{ extraction_confidence.invoice_number|default:0 }} %</span></div>{% if extraction_confidence.method %}<details class="extraction-log"><summary>Erkennungsprotokoll</summary><p>Methode: {{ extraction_confidence.method }}{% if extraction_confidence.variant %} · Variante: {{ extraction_confidence.variant }}{% endif %}</p><ul>{% for reason in extraction_confidence.details.merchant %}<li>Aussteller: {{ reason }}</li>{% endfor %}{% for reason in extraction_confidence.details.document_date %}<li>Datum: {{ reason }}</li>{% endfor %}{% for reason in extraction_confidence.details.total_amount %}<li>Betrag: {{ reason }}</li>{% endfor %}{% for reason in extraction_confidence.details.invoice_number %}<li>Rechnungsnummer: {{ reason }}</li>{% endfor %}</ul></details>{% endif %}{% endif %}<form method="post">{% csrf_token %}{{ review_form.as_p }}{{ link_form.as_p }}<button name="action" value="save">Speichern und abschließen</button>{% if document.kind != "bank_statement" %} <button class="secondary" name="action" value="retry">Erneut analysieren</button>{% endif %}</form></section>
   </div>
   <details class="card"><summary>Erkannten Text anzeigen</summary><pre>{{ document.extracted_text }}</pre></details>
   {% endif %}
