@@ -15,9 +15,17 @@ from .models import Document
 
 DATE_RE = re.compile(r"\b([0-3]?\d[./-][01]?\d[./-](?:20)?\d{2})\b")
 AMOUNT_RE = re.compile(r"(?<!\d)(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2})(?:\s*(?:EUR|€))?", re.I)
-TOTAL_HINTS = ("gesamt", "summe", "total", "zu zahlen", "rechnungsbetrag", "endbetrag")
+TOTAL_HINT_PRIORITIES = (
+    (100, re.compile(r"\b(?:zu zahlender betrag|zahlbetrag|gesamtbetrag|rechnungsbetrag|endbetrag)\b", re.I)),
+    (80, re.compile(r"\bzu zahlen\b", re.I)),
+    (60, re.compile(r"\b(?:gesamt|summe|total)\b", re.I)),
+)
 INVOICE_NUMBER_RE = re.compile(
     r"(?:rechnungs(?:nummer|nr\.?|[- ]?nr\.?|[- ]?no\.?)|invoice(?: number| no\.?)?)\s*[:#]?\s*([A-Z0-9][A-Z0-9./_-]{2,})",
+    re.I,
+)
+REVERSE_INVOICE_NUMBER_RE = re.compile(
+    r"\b([A-Z0-9][A-Z0-9./_-]{2,})\s*rechnungs(?:nummer|nr\.?)\b",
     re.I,
 )
 MERCHANT_EXCLUDES = (
@@ -34,6 +42,9 @@ RECEIPT_MERCHANTS = {
     "kaufland": "Kaufland",
     "dm drogerie": "dm-drogerie markt",
     "rossmann": "ROSSMANN",
+}
+KNOWN_MERCHANTS = {
+    "congstar": "congstar",
 }
 OCR_RECEIPT_HINTS = (
     "zu zahlen", "kartenzahlung", "kundenbeleg", "mwst", "eur", "datum",
@@ -180,16 +191,26 @@ def _parse_total(text: str) -> Decimal | None:
         amounts = [_decimal(value) for value in AMOUNT_RE.findall(line)]
         amounts = [value for value in amounts if value is not None and value >= 0]
         all_amounts.extend(amounts)
-        if any(hint in line.casefold() for hint in TOTAL_HINTS):
-            hinted.extend(amounts)
-    candidates = hinted or all_amounts
-    return candidates[-1] if hinted else (max(candidates) if candidates else None)
+        priority = max(
+            (score for score, pattern in TOTAL_HINT_PRIORITIES if pattern.search(line)),
+            default=0,
+        )
+        if priority and amounts:
+            hinted.append((priority, amounts[-1]))
+    if hinted:
+        highest_priority = max(priority for priority, _amount in hinted)
+        return next(amount for priority, amount in hinted if priority == highest_priority)
+    return max(all_amounts) if all_amounts else None
 
 
 def _parse_merchant(text: str) -> str:
     normalized_text = " ".join(text.casefold().split())
-    for needle, merchant in RECEIPT_MERCHANTS.items():
+    for needle, merchant in KNOWN_MERCHANTS.items():
         if needle in normalized_text:
+            return merchant
+    document_lead = " ".join(text.casefold().splitlines()[:30])
+    for needle, merchant in RECEIPT_MERCHANTS.items():
+        if needle in document_lead:
             return merchant
     for line in text.splitlines()[:15]:
         candidate = " ".join(line.split()).strip(" -|:")
@@ -207,6 +228,9 @@ def _parse_merchant(text: str) -> str:
 
 
 def _parse_invoice_number(text: str) -> str:
+    reverse_match = REVERSE_INVOICE_NUMBER_RE.search(text)
+    if reverse_match:
+        return reverse_match.group(1).strip(".,")
     match = INVOICE_NUMBER_RE.search(text)
     return match.group(1).strip(".,") if match else ""
 

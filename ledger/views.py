@@ -801,6 +801,14 @@ def document_review(request, pk):
         candidate.match_details = detail_map.get(candidate.pk, "")
     if request.method == "POST":
         if request.POST.get("action") == "retry":
+            document.merchant = ""
+            document.total_amount = None
+            document.invoice_number = ""
+            document.extraction_confidence = {}
+            document.save(update_fields=[
+                "merchant", "total_amount", "invoice_number", "extraction_confidence",
+                "updated_at",
+            ])
             process_document_task.delay(document.pk)
             messages.success(request, "Erneute Analyse wurde vorgemerkt.")
             return redirect("document_review", pk=document.pk)

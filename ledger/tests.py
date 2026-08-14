@@ -1082,6 +1082,53 @@ Gesamt 12,34 EUR
         self.assertEqual(_parse_total(text), Decimal("12.34"))
         self.assertEqual(_parse_merchant(text), "Musterladen Berlin")
 
+    def test_extracts_congstar_invoice_without_confusing_data_volume_for_total(self):
+        text = """22,60 €Gesamtbetrag:
+Rechnung für Juli 2026
+congstar Kundenservice • Postfach 1165 • 61466 Kronberg
+22,60 € Zu zahlender Betrag:
+7675138395Rechnungsnummer
+Leistung Brutto (EUR)
+19 10,08 € 1,92 € 12,00 €
+Dein insgesamt verbrauchtes Datenvolumen: 1,56 GB
+congstar - eine Marke der Telekom Deutschland GmbH
+Netto Steuer Brutto
+"""
+
+        self.assertEqual(_parse_merchant(text), "congstar")
+        self.assertEqual(_parse_total(text), Decimal("22.60"))
+        self.assertEqual(_parse_invoice_number(text), "7675138395")
+
+    def test_generic_total_hint_does_not_match_word_insgesamt(self):
+        text = "Dein insgesamt verbrauchtes Datenvolumen: 1,56 GB\nPreis 12,00 €"
+
+        self.assertEqual(_parse_total(text), Decimal("12.00"))
+
+    @patch("ledger.views.process_document_task.delay")
+    def test_retry_clears_incorrect_extracted_fields_before_reanalysis(self, delay):
+        document = Document.objects.create(
+            kind=Document.Kind.INVOICE,
+            title="congstar Rechnung Juli",
+            original_filename="congstar.pdf",
+            file=SimpleUploadedFile("congstar.pdf", b"%PDF-congstar", "application/pdf"),
+            merchant="Netto Marken-Discount",
+            total_amount="1.56",
+            invoice_number="Seite",
+            extraction_confidence={"merchant": 75, "total_amount": 90},
+        )
+
+        response = self.client.post(
+            reverse("document_review", args=[document.pk]), {"action": "retry"}
+        )
+
+        document.refresh_from_db()
+        self.assertRedirects(response, reverse("document_review", args=[document.pk]))
+        self.assertEqual(document.merchant, "")
+        self.assertIsNone(document.total_amount)
+        self.assertEqual(document.invoice_number, "")
+        self.assertEqual(document.extraction_confidence, {})
+        delay.assert_called_once_with(document.pk)
+
     def test_bank_statement_detail_prioritizes_original_without_transaction_matching(self):
         account = Account.objects.create(name="Vorschaukonto")
         document = Document.objects.create(
