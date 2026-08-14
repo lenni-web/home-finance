@@ -36,9 +36,23 @@ REVERSE_INVOICE_NUMBER_RE = re.compile(
     re.I,
 )
 SELLER_RE = re.compile(r"\bverkauft\s+von\s+([^\r\n]{2,160})", re.I)
+BILLER_LABEL_RE = re.compile(
+    r"^(?:in\s+rechnung\s+gestellt\s+von|rechnungssteller|"
+    r"billed\s+by|invoice\s+from)\s*:?\s*(.*)$",
+    re.I,
+)
+COMPANY_SUFFIX_RE = re.compile(
+    r"\b(?:llc|ltd\.?|limited|inc\.?|corp\.?|corporation|gmbh|ug|ag|se|kg|ohg|"
+    r"gbr|s\.?a\.?r\.?l\.?|s\.?r\.?l\.?)\b",
+    re.I,
+)
+BILLER_VALUE_EXCLUDES = (
+    "versandkosten", "umsatzsteuer", "zwischensumme", "gesamtsumme", "gesamt", "summe",
+    "zahlung", "saldo", "preis", "anzahl", "artikel", "bestellung",
+)
 MERCHANT_EXCLUDES = (
     "rechnung", "kassenbon", "quittung", "datum", "seite", "kunden", "beleg", "steuer",
-    "ust-id", "iban", "betrag",
+    "ust-id", "iban", "betrag", "alle bestellungen anzeigen", "bestellungsübersicht",
 )
 RECEIPT_MERCHANTS = {
     "aldi": "ALDI",
@@ -242,6 +256,29 @@ def _parse_merchant(text: str) -> str:
         seller = " ".join(seller_match.group(1).split()).strip(" -|:,. ")
         if seller:
             return seller
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        biller_match = BILLER_LABEL_RE.match(" ".join(line.split()))
+        if not biller_match:
+            continue
+        candidates = [biller_match.group(1), *lines[index + 1:index + 7]]
+        cleaned_candidates = []
+        for value in candidates:
+            biller = " ".join(value.split()).strip(" -|:,. ")
+            lowered = biller.casefold()
+            if not biller or not any(character.isalpha() for character in biller):
+                continue
+            if any(excluded in lowered for excluded in BILLER_VALUE_EXCLUDES):
+                continue
+            cleaned_candidates.append(biller)
+        company_candidate = next(
+            (candidate for candidate in cleaned_candidates if COMPANY_SUFFIX_RE.search(candidate)),
+            None,
+        )
+        if company_candidate:
+            return company_candidate
+        if cleaned_candidates:
+            return cleaned_candidates[0]
     for needle, merchant in KNOWN_MERCHANTS.items():
         if needle in normalized_text:
             return merchant
@@ -249,7 +286,7 @@ def _parse_merchant(text: str) -> str:
     for needle, merchant in RECEIPT_MERCHANTS.items():
         if needle in document_lead:
             return merchant
-    for line in text.splitlines()[:15]:
+    for line in lines[:15]:
         candidate = " ".join(line.split()).strip(" -|:")
         lowered = candidate.casefold()
         if not (3 <= len(candidate) <= 120):

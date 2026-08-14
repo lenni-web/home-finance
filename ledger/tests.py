@@ -1133,6 +1133,27 @@ Zahlbetrag 19,90 €
 
         self.assertEqual(_parse_merchant(text), "Beispiel Handel GmbH")
 
+    def test_extracts_biller_below_label_instead_of_navigation_text(self):
+        text = """Rechnungsempfänger                        Bestellungsübersicht
+Alle Bestellungen anzeigen
+Bestellnummer: 40321100
+In Rechnung gestellt von                    Versandkosten -
+Umsatzsteuer _
+Faithlife LLC
+315 Prospect St #759
+Gesamtsumme 7,49 $ USD
+"""
+
+        self.assertEqual(_parse_merchant(text), "Faithlife LLC")
+
+    def test_extracts_inline_english_biller(self):
+        text = """Invoice
+Billed by: Example Software Ltd.
+Total 12,00 EUR
+"""
+
+        self.assertEqual(_parse_merchant(text), "Example Software Ltd")
+
     @patch("ledger.views.process_document_task.delay")
     def test_retry_clears_incorrect_extracted_fields_before_reanalysis(self, delay):
         document = Document.objects.create(
