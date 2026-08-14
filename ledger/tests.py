@@ -1104,6 +1104,35 @@ Netto Steuer Brutto
 
         self.assertEqual(_parse_total(text), Decimal("12.00"))
 
+    def test_extracts_amazon_seller_and_textual_invoice_date(self):
+        text = """Rechnung
+LU-BIO-04
+Amazon EU S.à r.l. - 38 avenue John F. Kennedy
+Gesamtpreis 6,95 €
+Bestelldatum 12 August 2026
+Verkauft von Amazon EU S.à r.l., Niederlassung Deutschland
+Rechnungsdatum
+/Lieferdatum 13 August 2026
+Rechnungsnummer DE62RHEQ3AEUI
+Zahlbetrag 6,95 €
+"""
+
+        self.assertEqual(
+            _parse_merchant(text), "Amazon EU S.à r.l., Niederlassung Deutschland"
+        )
+        self.assertEqual(_parse_date(text), date(2026, 8, 13))
+        self.assertEqual(_parse_total(text), Decimal("6.95"))
+        self.assertEqual(_parse_invoice_number(text), "DE62RHEQ3AEUI")
+
+    def test_extracts_third_party_seller_from_amazon_invoice(self):
+        text = """Amazon.de Rechnung
+AMZ-123-ABC
+Verkauft von Beispiel Handel GmbH
+Zahlbetrag 19,90 €
+"""
+
+        self.assertEqual(_parse_merchant(text), "Beispiel Handel GmbH")
+
     @patch("ledger.views.process_document_task.delay")
     def test_retry_clears_incorrect_extracted_fields_before_reanalysis(self, delay):
         document = Document.objects.create(
@@ -1127,6 +1156,24 @@ Netto Steuer Brutto
         self.assertIsNone(document.total_amount)
         self.assertEqual(document.invoice_number, "")
         self.assertEqual(document.extraction_confidence, {})
+        delay.assert_called_once_with(document.pk)
+
+    @patch("ledger.views.process_document_task.delay")
+    def test_retry_clears_automatically_generated_title_with_wrong_merchant(self, delay):
+        document = Document.objects.create(
+            kind=Document.Kind.INVOICE,
+            title="LU-BIO-04",
+            original_filename="amazon.pdf",
+            file=SimpleUploadedFile("amazon.pdf", b"%PDF-amazon", "application/pdf"),
+            merchant="LU-BIO-04",
+            total_amount="6.95",
+        )
+
+        self.client.post(reverse("document_review", args=[document.pk]), {"action": "retry"})
+
+        document.refresh_from_db()
+        self.assertEqual(document.title, "")
+        self.assertEqual(document.merchant, "")
         delay.assert_called_once_with(document.pk)
 
     def test_bank_statement_detail_prioritizes_original_without_transaction_matching(self):

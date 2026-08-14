@@ -14,6 +14,13 @@ from .models import Document
 
 
 DATE_RE = re.compile(r"\b([0-3]?\d[./-][01]?\d[./-](?:20)?\d{2})\b")
+TEXTUAL_DATE_RE = re.compile(
+    r"\b([0-3]?\d)\.?\s+"
+    r"(januar|january|februar|february|märz|maerz|march|april|mai|may|juni|june|"
+    r"juli|july|august|september|oktober|october|november|dezember|december)"
+    r"\s+(20\d{2})\b",
+    re.I,
+)
 AMOUNT_RE = re.compile(r"(?<!\d)(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2})(?:\s*(?:EUR|€))?", re.I)
 TOTAL_HINT_PRIORITIES = (
     (100, re.compile(r"\b(?:zu zahlender betrag|zahlbetrag|gesamtbetrag|rechnungsbetrag|endbetrag)\b", re.I)),
@@ -25,9 +32,10 @@ INVOICE_NUMBER_RE = re.compile(
     re.I,
 )
 REVERSE_INVOICE_NUMBER_RE = re.compile(
-    r"\b([A-Z0-9][A-Z0-9./_-]{2,})\s*rechnungs(?:nummer|nr\.?)\b",
+    r"\b([A-Z0-9][A-Z0-9./_-]{2,})[ \t]*rechnungs(?:nummer|nr\.?)\b",
     re.I,
 )
+SELLER_RE = re.compile(r"\bverkauft\s+von\s+([^\r\n]{2,160})", re.I)
 MERCHANT_EXCLUDES = (
     "rechnung", "kassenbon", "quittung", "datum", "seite", "kunden", "beleg", "steuer",
     "ust-id", "iban", "betrag",
@@ -45,6 +53,7 @@ RECEIPT_MERCHANTS = {
 }
 KNOWN_MERCHANTS = {
     "congstar": "congstar",
+    "amazon": "Amazon",
 }
 OCR_RECEIPT_HINTS = (
     "zu zahlen", "kartenzahlung", "kundenbeleg", "mwst", "eur", "datum",
@@ -173,6 +182,29 @@ def _parse_date(text: str) -> date | None:
                     return parsed
             except ValueError:
                 pass
+    textual_candidates = list(TEXTUAL_DATE_RE.finditer(text))
+    invoice_date_position = text.casefold().find("rechnungsdatum")
+    if invoice_date_position >= 0:
+        contextual = [
+            match for match in textual_candidates
+            if invoice_date_position <= match.start() <= invoice_date_position + 120
+        ]
+        textual_candidates = contextual + [
+            match for match in textual_candidates if match not in contextual
+        ]
+    month_numbers = {
+        "januar": 1, "january": 1, "februar": 2, "february": 2,
+        "märz": 3, "maerz": 3, "march": 3, "april": 4, "mai": 5, "may": 5,
+        "juni": 6, "june": 6, "juli": 7, "july": 7, "august": 8,
+        "september": 9, "oktober": 10, "october": 10, "november": 11,
+        "dezember": 12, "december": 12,
+    }
+    for match in textual_candidates:
+        parsed = date(
+            int(match.group(3)), month_numbers[match.group(2).casefold()], int(match.group(1))
+        )
+        if date(2000, 1, 1) <= parsed <= timezone.localdate():
+            return parsed
     return None
 
 
@@ -205,6 +237,11 @@ def _parse_total(text: str) -> Decimal | None:
 
 def _parse_merchant(text: str) -> str:
     normalized_text = " ".join(text.casefold().split())
+    seller_match = SELLER_RE.search(text)
+    if seller_match:
+        seller = " ".join(seller_match.group(1).split()).strip(" -|:,. ")
+        if seller:
+            return seller
     for needle, merchant in KNOWN_MERCHANTS.items():
         if needle in normalized_text:
             return merchant
@@ -222,6 +259,8 @@ def _parse_merchant(text: str) -> str:
         if any(excluded in lowered for excluded in MERCHANT_EXCLUDES):
             continue
         if AMOUNT_RE.fullmatch(candidate):
+            continue
+        if re.fullmatch(r"[A-Z]{2,}(?:-[A-Z0-9]{2,})+", candidate):
             continue
         return candidate
     return ""
