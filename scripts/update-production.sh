@@ -21,12 +21,19 @@ printf 'Sicherung vor dem Update ...\n'
 git fetch --tags origin
 git checkout --detach "${target_ref}"
 new_revision="$(git rev-parse HEAD)"
+new_tag="$(git describe --tags --exact-match HEAD 2>/dev/null || printf 'ungetaggt')"
 
 if grep -q '^DEPLOY_REVISION=' .env; then
   sed -i.bak "s/^DEPLOY_REVISION=.*/DEPLOY_REVISION=${new_revision}/" .env
   rm -f .env.bak
 else
   printf '\nDEPLOY_REVISION=%s\n' "${new_revision}" >> .env
+fi
+if grep -q '^DEPLOY_TAG=' .env; then
+  sed -i.bak "s/^DEPLOY_TAG=.*/DEPLOY_TAG=${new_tag}/" .env
+  rm -f .env.bak
+else
+  printf '\nDEPLOY_TAG=%s\n' "${new_tag}" >> .env
 fi
 
 if ! "${compose[@]}" up -d --build --remove-orphans --wait; then
@@ -37,4 +44,4 @@ if ! "${compose[@]}" up -d --build --remove-orphans --wait; then
 fi
 
 "${compose[@]}" exec -T web python manage.py check
-printf 'Update abgeschlossen: %s\n' "${new_revision}"
+printf 'Update abgeschlossen: %s (%s)\n' "${new_tag}" "${new_revision}"

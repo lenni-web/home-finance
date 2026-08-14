@@ -14,11 +14,18 @@ if grep -q 'replace-with-' .env; then
 fi
 
 revision="$(git rev-parse HEAD 2>/dev/null || printf 'unknown')"
+deploy_tag="$(git describe --tags --exact-match HEAD 2>/dev/null || printf 'ungetaggt')"
 if grep -q '^DEPLOY_REVISION=' .env; then
   sed -i.bak "s/^DEPLOY_REVISION=.*/DEPLOY_REVISION=${revision}/" .env
   rm -f .env.bak
 else
   printf '\nDEPLOY_REVISION=%s\n' "${revision}" >> .env
+fi
+if grep -q '^DEPLOY_TAG=' .env; then
+  sed -i.bak "s/^DEPLOY_TAG=.*/DEPLOY_TAG=${deploy_tag}/" .env
+  rm -f .env.bak
+else
+  printf '\nDEPLOY_TAG=%s\n' "${deploy_tag}" >> .env
 fi
 
 docker compose -f compose.yaml -f compose.prod.yaml config --quiet

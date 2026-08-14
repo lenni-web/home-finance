@@ -1,4 +1,5 @@
 import os
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -99,6 +100,11 @@ CELERY_BEAT_SCHEDULE = {
 }
 EMAIL_CREDENTIAL_KEY = os.environ.get("EMAIL_CREDENTIAL_KEY", SECRET_KEY)
 DEPLOY_REVISION = os.environ.get("DEPLOY_REVISION", "unbekannt")
+try:
+    package_version = f"v{version('ausgaben-archiv')}"
+except PackageNotFoundError:
+    package_version = "unbekannt"
+DEPLOY_TAG = os.environ.get("DEPLOY_TAG", package_version)
 
 LOGGING = {
     "version": 1,

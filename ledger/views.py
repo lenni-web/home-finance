@@ -987,6 +987,7 @@ def operational_status(request):
         "disk_free_gb": disk.free / (1024 ** 3),
         "disk_percent_free": disk.free / disk.total * 100,
         "revision": django_settings.DEPLOY_REVISION,
+        "version": django_settings.DEPLOY_TAG,
         "worker": worker,
         "email_heartbeat": email_heartbeat,
         "latest_backup": latest_backup,

@@ -126,6 +126,16 @@ class AccessControlTests(TestCase):
         self.client.force_login(self.user)
         self.assertContains(self.client.get(url), "Betriebsstatus")
 
+    @override_settings(DEPLOY_TAG="v0.3.7", DEPLOY_REVISION="abc123")
+    def test_operational_status_shows_installed_git_tag(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("operational_status"))
+
+        self.assertContains(response, "Installierte Version")
+        self.assertContains(response, "v0.3.7")
+        self.assertContains(response, "abc123")
+
     @override_settings(TIME_ZONE="Europe/Berlin")
     def test_operational_status_displays_timestamps_in_german_local_time(self):
         utc_timestamp = datetime(2026, 8, 12, 15, 55, tzinfo=ZoneInfo("UTC"))
