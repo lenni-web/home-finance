@@ -11,6 +11,10 @@ from .models import (
 )
 
 
+def tag_checkbox_widget():
+    return forms.CheckboxSelectMultiple(attrs={"class": "tag-toggle-list"})
+
+
 class AccountForm(forms.ModelForm):
     class Meta:
         model = Account
@@ -113,7 +117,10 @@ class DocumentUploadForm(forms.ModelForm):
             "category": "Kategorie (optional)",
             "tags": "Tags (optional)",
         }
-        widgets = {"document_date": forms.DateInput(attrs={"type": "date"})}
+        widgets = {
+            "document_date": forms.DateInput(attrs={"type": "date"}),
+            "tags": tag_checkbox_widget(),
+        }
 
     def clean_file(self):
         uploaded = self.cleaned_data["file"]
@@ -168,7 +175,7 @@ class DocumentReviewForm(forms.ModelForm):
         labels = {"invoice_number": "Rechnungsnummer"}
         widgets = {
             "document_date": forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
-            "tags": forms.SelectMultiple(attrs={"size": 4}),
+            "tags": tag_checkbox_widget(),
         }
 
     def __init__(self, *args, **kwargs):
@@ -305,7 +312,7 @@ class TransactionCategorizationForm(forms.ModelForm):
         fields = ["category", "tags", "people", "comment", "is_internal_transfer"]
         labels = {"comment": "Kommentar", "is_internal_transfer": "Umbuchung"}
         widgets = {
-            "tags": forms.SelectMultiple(attrs={"size": 3}),
+            "tags": tag_checkbox_widget(),
             "people": forms.SelectMultiple(attrs={"size": 4}),
             "comment": forms.Textarea(attrs={
                 "rows": 3,
@@ -326,7 +333,12 @@ class BulkCategorizationForm(forms.Form):
         queryset=Category.objects.filter(active=True), required=False, empty_label="Nicht ändern"
     )
     tags = forms.ModelMultipleChoiceField(
-        queryset=Tag.objects.filter(active=True), required=False, widget=forms.SelectMultiple(attrs={"size": 3})
+        queryset=Tag.objects.filter(active=True), required=False, widget=tag_checkbox_widget(),
+        label="Tags hinzufügen",
+    )
+    remove_tags = forms.ModelMultipleChoiceField(
+        queryset=Tag.objects.filter(active=True), required=False, widget=tag_checkbox_widget(),
+        label="Tags entfernen",
     )
     people = forms.ModelMultipleChoiceField(
         queryset=Person.objects.filter(active=True), required=False,
@@ -374,6 +386,7 @@ class CategorizationRuleForm(forms.ModelForm):
             "marks_internal_transfer", "auto_apply",
         ]
         labels = {"priority": "Priorität (höher wird zuerst geprüft)"}
+        widgets = {"tags": tag_checkbox_widget()}
 
 
 class CategorizationRuleFilterForm(forms.Form):

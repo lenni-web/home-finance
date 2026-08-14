@@ -480,6 +480,32 @@ class CategorizationWorkflowTests(TestCase):
         self.assertContains(response, "Beispielmarkt Berlin")
         self.assertContains(response, "Geburtstagsgeschenk für die Familie")
 
+    def test_existing_transaction_tag_can_be_removed_with_checkbox(self):
+        tag = Tag.objects.create(name="Entfernbar")
+        self.item.tags.add(tag)
+
+        response = self.client.get(reverse("transaction_overview"))
+
+        self.assertContains(response, 'type="checkbox" name="transactions-0-tags"')
+        self.assertContains(response, f'value="{tag.pk}" class="tag-toggle-list"')
+        self.assertContains(response, 'id="id_transactions-0-tags_0" checked')
+
+        response = self.client.post(reverse("transaction_overview"), {
+            "transactions-TOTAL_FORMS": "1",
+            "transactions-INITIAL_FORMS": "1",
+            "transactions-MIN_NUM_FORMS": "0",
+            "transactions-MAX_NUM_FORMS": "1000",
+            "transactions-0-id": str(self.item.pk),
+            "transactions-0-category": "",
+            "transactions-0-tags": [],
+            "transactions-0-people": [],
+            "transactions-0-comment": "",
+            "action": "inline_save",
+        })
+
+        self.assertRedirects(response, reverse("transaction_overview"))
+        self.assertFalse(self.item.tags.exists())
+
     def test_transaction_selection_uses_large_checkbox_style(self):
         response = self.client.get(reverse("transaction_overview"))
 
@@ -516,6 +542,30 @@ class CategorizationWorkflowTests(TestCase):
         rule = CategorizationRule.objects.get()
         self.assertEqual(rule.match_text, "Beispielmarkt Berlin")
         self.assertTrue(rule.auto_apply)
+
+    def test_bulk_action_can_remove_selected_tag(self):
+        tag = Tag.objects.create(name="Alt")
+        self.item.tags.add(tag)
+
+        response = self.client.post(reverse("transaction_overview"), {
+            "transactions-TOTAL_FORMS": "1",
+            "transactions-INITIAL_FORMS": "1",
+            "transactions-MIN_NUM_FORMS": "0",
+            "transactions-MAX_NUM_FORMS": "1000",
+            "transactions-0-id": str(self.item.pk),
+            "transactions-0-category": "",
+            "transactions-0-tags": [str(tag.pk)],
+            "transactions-0-people": [],
+            "bulk-category": "",
+            "bulk-tags": [],
+            "bulk-remove_tags": [str(tag.pk)],
+            "bulk-people": [],
+            "selected": [str(self.item.pk)],
+            "action": "bulk",
+        })
+
+        self.assertRedirects(response, reverse("transaction_overview"))
+        self.assertFalse(self.item.tags.exists())
 
     def test_rule_applies_to_new_transaction(self):
         category = Category.objects.create(name="Lebensmittel")

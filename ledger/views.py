@@ -558,6 +558,7 @@ def transaction_overview(request):
                         elif bulk.get("transfer_action") == "unmark":
                             unlink_transfer(item)
                         item.tags.add(*bulk["tags"])
+                        item.tags.remove(*bulk["remove_tags"])
                         item.people.add(*bulk["people"])
                     if bulk.get("create_rules"):
                         _create_rules_from_transactions(selected, bulk)
@@ -627,6 +628,7 @@ def _create_rules_from_transactions(transactions, bulk):
                 "category", "marks_internal_transfer", "auto_apply", "updated_at"
             ])
         rule.tags.add(*bulk["tags"])
+        rule.tags.remove(*bulk["remove_tags"])
         rule.people.add(*bulk["people"])
 
 
