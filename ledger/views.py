@@ -9,7 +9,7 @@ from urllib.parse import urlencode
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.conf import settings as django_settings
-from django.db import connection
+from django.db import connection, transaction as db_transaction
 from django.db.models import Count, DecimalField, Q, Sum, Value
 from django.db.models.functions import Coalesce
 from django.db.models.functions import TruncMonth
@@ -847,6 +847,66 @@ def document_review(request, pk):
         "link_form": link_form,
         "extraction_confidence": document.extraction_confidence,
     })
+
+
+@login_required
+@require_POST
+def retry_failed_document(request, pk):
+    document = get_object_or_404(
+        Document, pk=pk, processing_status=Document.ProcessingStatus.FAILED
+    )
+    statement = None
+    if document.kind == Document.Kind.BANK_STATEMENT:
+        statement = get_object_or_404(
+            StatementImport, document=document, status=StatementImport.Status.FAILED
+        )
+    document.processing_status = Document.ProcessingStatus.PENDING
+    document.processing_error = ""
+    document.save(update_fields=["processing_status", "processing_error", "updated_at"])
+
+    if statement:
+        statement.status = StatementImport.Status.UPLOADED
+        statement.error_message = ""
+        statement.save(update_fields=["status", "error_message", "updated_at"])
+        process_statement_task.delay(statement.pk)
+    else:
+        process_document_task.delay(document.pk)
+
+    messages.success(request, "Die erneute Verarbeitung wurde gestartet.")
+    return redirect("document_review", pk=document.pk)
+
+
+@login_required
+@require_POST
+def delete_failed_document(request, pk):
+    document = get_object_or_404(
+        Document, pk=pk, processing_status=Document.ProcessingStatus.FAILED
+    )
+    if document.transactions.exists():
+        messages.error(
+            request,
+            "Das Dokument ist bereits mit Buchungen verknüpft und kann nicht gelöscht werden.",
+        )
+        return redirect("document_review", pk=document.pk)
+
+    file_name = document.file.name
+    storage = document.file.storage
+    with db_transaction.atomic():
+        statement = StatementImport.objects.filter(document=document).first()
+        if statement:
+            if statement.status != StatementImport.Status.FAILED or statement.transactions.exists():
+                messages.error(
+                    request,
+                    "Der Kontoauszug enthält bereits verarbeitete Daten und kann nicht gelöscht werden.",
+                )
+                return redirect("document_review", pk=document.pk)
+            statement.delete()
+        document.delete()
+        if file_name:
+            db_transaction.on_commit(lambda: storage.delete(file_name))
+
+    messages.success(request, "Das fehlgeschlagene Dokument wurde vollständig gelöscht.")
+    return redirect("document_archive")
 
 
 @login_required

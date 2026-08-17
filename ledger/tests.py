@@ -1303,6 +1303,86 @@ Total 12,00 EUR
         self.assertEqual(document.merchant, "")
         delay.assert_called_once_with(document.pk)
 
+    @patch("ledger.views.process_statement_task.delay")
+    def test_failed_bank_statement_can_be_retried(self, delay):
+        account = Account.objects.create(name="Fehlerkonto")
+        document = Document.objects.create(
+            kind=Document.Kind.BANK_STATEMENT,
+            original_filename="fehlgeschlagen.pdf",
+            file=SimpleUploadedFile("fehlgeschlagen.pdf", b"%PDF-failed", "application/pdf"),
+            processing_status=Document.ProcessingStatus.FAILED,
+            processing_error="Keine Buchungen erkannt.",
+        )
+        statement = StatementImport.objects.create(
+            document=document,
+            account=account,
+            status=StatementImport.Status.FAILED,
+            error_message="Keine Buchungen erkannt.",
+        )
+
+        response = self.client.post(reverse("retry_failed_document", args=[document.pk]))
+
+        document.refresh_from_db()
+        statement.refresh_from_db()
+        self.assertRedirects(response, reverse("document_review", args=[document.pk]))
+        self.assertEqual(document.processing_status, Document.ProcessingStatus.PENDING)
+        self.assertEqual(document.processing_error, "")
+        self.assertEqual(statement.status, StatementImport.Status.UPLOADED)
+        self.assertEqual(statement.error_message, "")
+        delay.assert_called_once_with(statement.pk)
+
+    def test_failed_bank_statement_and_original_file_can_be_deleted(self):
+        account = Account.objects.create(name="Löschkonto")
+        document = Document.objects.create(
+            kind=Document.Kind.BANK_STATEMENT,
+            original_filename="loeschen.pdf",
+            file=SimpleUploadedFile("loeschen.pdf", b"%PDF-delete", "application/pdf"),
+            processing_status=Document.ProcessingStatus.FAILED,
+        )
+        statement = StatementImport.objects.create(
+            document=document,
+            account=account,
+            status=StatementImport.Status.FAILED,
+        )
+        document_pk = document.pk
+        statement_pk = statement.pk
+        storage = document.file.storage
+        file_name = document.file.name
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(reverse("delete_failed_document", args=[document.pk]))
+
+        self.assertRedirects(response, reverse("document_archive"))
+        self.assertFalse(Document.objects.filter(pk=document_pk).exists())
+        self.assertFalse(StatementImport.objects.filter(pk=statement_pk).exists())
+        self.assertFalse(storage.exists(file_name))
+
+    def test_processed_document_cannot_be_deleted_through_failed_document_action(self):
+        document = Document.objects.create(
+            kind=Document.Kind.INVOICE,
+            original_filename="behalten.pdf",
+            file=SimpleUploadedFile("behalten.pdf", b"%PDF-keep", "application/pdf"),
+            processing_status=Document.ProcessingStatus.PROCESSED,
+        )
+
+        response = self.client.post(reverse("delete_failed_document", args=[document.pk]))
+
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(Document.objects.filter(pk=document.pk).exists())
+
+    def test_failed_document_deletion_requires_post(self):
+        document = Document.objects.create(
+            kind=Document.Kind.INVOICE,
+            original_filename="post-only.pdf",
+            file=SimpleUploadedFile("post-only.pdf", b"%PDF-post", "application/pdf"),
+            processing_status=Document.ProcessingStatus.FAILED,
+        )
+
+        response = self.client.get(reverse("delete_failed_document", args=[document.pk]))
+
+        self.assertEqual(response.status_code, 405)
+        self.assertTrue(Document.objects.filter(pk=document.pk).exists())
+
     def test_bank_statement_detail_prioritizes_original_without_transaction_matching(self):
         account = Account.objects.create(name="Vorschaukonto")
         document = Document.objects.create(

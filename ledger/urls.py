@@ -13,6 +13,8 @@ urlpatterns = [
     path("documents/upload/", views.upload_document, name="upload_document"),
     path("documents/", views.document_archive, name="document_archive"),
     path("documents/<int:pk>/review/", views.document_review, name="document_review"),
+    path("documents/<int:pk>/retry/", views.retry_failed_document, name="retry_failed_document"),
+    path("documents/<int:pk>/delete/", views.delete_failed_document, name="delete_failed_document"),
     path("documents/<int:pk>/file/", views.document_download, name="document_download"),
     path("matches/automatic/", views.automatic_matches, name="automatic_matches"),
     path(
