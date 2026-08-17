@@ -67,3 +67,37 @@ class INGStatementParserTests(TestCase):
 
         self.assertEqual(opening, Decimal("1000.00"))
         self.assertEqual(closing, Decimal("875.50"))
+
+    def test_parses_turnover_display_with_running_balance_column(self):
+        fragments = [[
+            TextFragment(1, 46, 731, "Umsatzanzeige"),
+            TextFragment(1, 47, 356, "14.08.2026"),
+            TextFragment(1, 47, 347, "14.08.2026"),
+            TextFragment(1, 125, 356, "Lennart Barfod"),
+            TextFragment(1, 125, 347, "Überweisung"),
+            TextFragment(1, 125, 338, "Autoversicherung"),
+            TextFragment(1, 426.5, 356, "1.700,00 €"),
+            TextFragment(1, 501.5, 356, "-1.300,00 €"),
+            TextFragment(1, 47, 314, "21.05.2026"),
+            TextFragment(1, 47, 305, "20.05.2026"),
+            TextFragment(1, 125, 314, "Julia Barfod"),
+            TextFragment(1, 125, 305, "Gutschrift"),
+            TextFragment(1, 297, 300, "Kontoname"),
+            TextFragment(1, 426.5, 314, "3.000,00 €"),
+            TextFragment(1, 499.2, 314, "+750,00 €"),
+        ]]
+
+        rows = INGStatementParser()._parse_turnover_rows(fragments)
+        result = [transaction for transaction, _balance in rows]
+
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0].booking_date, "2026-08-14")
+        self.assertEqual(result[0].value_date, "2026-08-14")
+        self.assertEqual(result[0].counterparty, "Lennart Barfod")
+        self.assertEqual(result[0].booking_type, "Überweisung")
+        self.assertEqual(result[0].description, "Autoversicherung")
+        self.assertEqual(result[0].amount, "-1300.00")
+        self.assertEqual(result[1].value_date, "2026-05-20")
+        self.assertEqual(result[1].amount, "750.00")
+        self.assertEqual(result[1].description, "")
+        self.assertEqual(rows[0][1], Decimal("1700.00"))

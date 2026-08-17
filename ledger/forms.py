@@ -122,6 +122,16 @@ class DocumentUploadForm(forms.ModelForm):
             "tags": tag_checkbox_widget(),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["kind"].choices = [
+            (
+                value,
+                "Kontoauszug / Umsatzanzeige" if value == Document.Kind.BANK_STATEMENT else label,
+            )
+            for value, label in self.fields["kind"].choices
+        ]
+
     def clean_file(self):
         uploaded = self.cleaned_data["file"]
         if uploaded.size > 30 * 1024 * 1024:
