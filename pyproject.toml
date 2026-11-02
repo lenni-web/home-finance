@@ -6,12 +6,12 @@ requires-python = ">=3.11"
 dependencies = [
   "Django>=5.2,<5.3",
   "psycopg[binary]>=3.2,<4",
-  "Pillow>=11,<12",
-  "pypdf>=5,<6",
+  "Pillow>=13,<14",
+  "pypdf>=6.21.4,<7",
   "celery[redis]>=5.5,<6",
   "gunicorn>=23,<24",
   "whitenoise>=6.8,<7",
-  "cryptography>=45,<47",
+  "cryptography>=50,<51",
 ]
 
 [build-system]
