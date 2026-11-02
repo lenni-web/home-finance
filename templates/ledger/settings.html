@@ -31,8 +31,8 @@
     </section>
     <section class="card table-wrap">
       <h2>Vorhandene Konten</h2>
-      <table><thead><tr><th>Name</th><th>IBAN-Kennung</th><th>Kontoauszüge</th><th></th></tr></thead><tbody>
-        {% for account in accounts %}<tr><td><strong>{{ account.name }}</strong></td><td class="iban">{% if account.iban_last_four %}•••• {{ account.iban_last_four }}{% else %}–{% endif %}</td><td>{{ account.statement_count }}</td><td><a class="button-link" href="{% url 'edit_account' account.pk %}">Bearbeiten</a></td></tr>{% empty %}<tr><td colspan="4" class="empty">Noch kein Konto angelegt.</td></tr>{% endfor %}
+      <table><thead><tr><th>Name</th><th>IBAN-Kennung</th><th>Format</th><th>Kontoauszüge</th><th></th></tr></thead><tbody>
+        {% for account in accounts %}<tr><td><strong>{{ account.name }}</strong></td><td class="iban">{% if account.iban_last_four %}•••• {{ account.iban_last_four }}{% else %}–{% endif %}</td><td>{{ account.get_import_format_display }}</td><td>{{ account.statement_count }}</td><td><a class="button-link" href="{% url 'edit_account' account.pk %}">Bearbeiten</a></td></tr>{% empty %}<tr><td colspan="5" class="empty">Noch kein Konto angelegt.</td></tr>{% endfor %}
       </tbody></table>
     </section>
   </div>

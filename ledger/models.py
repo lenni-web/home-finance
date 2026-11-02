@@ -40,9 +40,19 @@ class BackupRecord(models.Model):
         return self.filename
 
 
+def import_format_choices():
+    from .importers import parser_choices
+
+    return parser_choices()
+
+
 class Account(TimestampedModel):
     name = models.CharField(max_length=120)
     iban_last_four = models.CharField(max_length=4, blank=True)
+    import_format = models.CharField(
+        max_length=50, choices=import_format_choices, default="ing_de_pdf",
+        verbose_name="Importformat",
+    )
 
     def __str__(self):
         return self.name

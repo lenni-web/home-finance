@@ -71,6 +71,7 @@ STORAGES = {
     },
 }
 MEDIA_ROOT = BASE_DIR / "media"
+TEST_RUNNER = "config.test_runner.IsolatedMediaRunner"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "dashboard"

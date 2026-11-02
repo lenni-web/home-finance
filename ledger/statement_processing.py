@@ -3,7 +3,7 @@ from pathlib import Path
 
 from django.db import transaction
 
-from .importers import INGStatementParser
+from .importers import get_parser
 from .models import Document, StatementImport, Transaction
 from .rules import apply_categorization_rules
 from .statement_reconciliation import store_reconciliation
@@ -20,7 +20,9 @@ def process_statement_import(statement):
     document.processing_error = ""
     document.save(update_fields=["processing_status", "processing_error", "updated_at"])
     try:
-        parsed_statement = INGStatementParser().parse_statement_pdf(Path(document.file.path))
+        parsed_statement = get_parser(statement.parser_name)().parse_statement(
+            Path(document.file.path)
+        )
         parsed = parsed_statement.transactions
         if not parsed:
             raise ValueError("Im PDF wurden keine Buchungen erkannt.")

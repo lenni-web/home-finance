@@ -1,11 +1,13 @@
 import json
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 
 from pypdf import PdfReader
+
+from .base import ParsedStatement, ParsedTransaction
 
 
 DATE_RE = re.compile(r"^\d{2}\.\d{2}\.\d{4}$")
@@ -32,40 +34,6 @@ class TextFragment:
     text: str
 
 
-@dataclass(frozen=True)
-class ParsedTransaction:
-    booking_date: str
-    value_date: str
-    booking_type: str
-    counterparty: str
-    description: str
-    amount: str
-    currency: str
-    source_page: int
-
-    def to_dict(self):
-        return asdict(self)
-
-
-@dataclass(frozen=True)
-class ParsedStatement:
-    transactions: list[ParsedTransaction]
-    opening_balance: Decimal | None
-    closing_balance: Decimal | None
-
-    @property
-    def transaction_total(self):
-        return sum((Decimal(item.amount) for item in self.transactions), Decimal("0.00"))
-
-    @property
-    def reconciliation_difference(self):
-        if self.opening_balance is None or self.closing_balance is None:
-            return None
-        return (self.opening_balance + self.transaction_total - self.closing_balance).quantize(
-            Decimal("0.01")
-        )
-
-
 class INGStatementParser:
     """Parser for the current ING Germany statement layout.
 
@@ -76,6 +44,11 @@ class INGStatementParser:
 
     name = "ing_de_pdf"
     version = 2
+    label = "ING Deutschland (PDF)"
+    file_extension = ".pdf"
+
+    def parse_statement(self, path: Path) -> ParsedStatement:
+        return self.parse_statement_pdf(path)
 
     @staticmethod
     def _date(value: str) -> str:

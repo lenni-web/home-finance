@@ -222,7 +222,7 @@ class StatementWorkflowTests(TestCase):
         self.assertEqual(statement.transactions.count(), 0)
         delay.assert_called_once_with(statement.pk)
 
-    @patch("ledger.statement_processing.INGStatementParser.parse_statement_pdf")
+    @patch("ledger.importers.INGStatementParser.parse_statement_pdf")
     def test_statement_background_processing_creates_review_batch(self, parse_statement_pdf):
         document = Document.objects.create(
             kind=Document.Kind.BANK_STATEMENT,

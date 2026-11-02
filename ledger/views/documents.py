@@ -19,7 +19,7 @@ from ..forms import (
     DocumentArchiveFilterForm, DocumentReviewForm, DocumentTransactionLinkForm,
     DocumentUploadForm,
 )
-from ..importers import INGStatementParser
+from ..importers import get_parser
 from ..models import Document, StatementImport
 from ..tasks import process_document_task, process_statement_task
 
@@ -32,11 +32,13 @@ def upload_document(request):
     if form.is_valid():
         document = form.save()
         if document.kind == Document.Kind.BANK_STATEMENT:
+            account = form.cleaned_data["account"]
+            parser = get_parser(account.import_format)
             statement = StatementImport.objects.create(
                 document=document,
-                account=form.cleaned_data["account"],
-                parser_name=INGStatementParser.name,
-                parser_version=INGStatementParser.version,
+                account=account,
+                parser_name=parser.name,
+                parser_version=parser.version,
                 status=StatementImport.Status.UPLOADED,
             )
             process_statement_task.delay(statement.pk)

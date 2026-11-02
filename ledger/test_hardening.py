@@ -338,3 +338,77 @@ class BudgetTests(TestCase):
 
         self.client.logout()
         self.assertEqual(self.client.get(reverse("budgets")).status_code, 302)
+
+
+class CSVUploadTests(TestCase):
+    CSV = (
+        "Buchungstag;Wertstellung;Beguenstigter;Verwendungszweck;Betrag;Saldo\n"
+        "01.09.2026;01.09.2026;Testshop;Bestellung;-20,00;980,00\n"
+    )
+
+    def setUp(self):
+        from .models import Account
+
+        self.user = get_user_model().objects.create_user("csv", password="secret-test-password")
+        self.client.force_login(self.user)
+        self.csv_account = Account.objects.create(name="Konto CSV", import_format="csv_generic")
+        self.pdf_account = Account.objects.create(name="Konto PDF")
+
+    def upload(self, name, content, content_type, account, kind="bank_statement"):
+        with patch("ledger.views.documents.process_statement_task.delay") as delay:
+            response = self.client.post(reverse("upload_document"), {
+                "file": SimpleUploadedFile(name, content, content_type),
+                "kind": kind, "account": account.pk,
+            }, follow=True)
+        return response, delay
+
+    def test_csv_statement_is_uploaded_parsed_and_reconciled(self):
+        from .models import StatementImport
+        from .statement_processing import process_statement_import
+
+        for content_type in ("text/csv", "application/vnd.ms-excel", "application/octet-stream"):
+            StatementImport.objects.all().delete()
+            from .models import Document
+
+            Document.objects.all().delete()
+            _response, delay = self.upload(
+                "umsaetze.csv", self.CSV.encode("utf-8"), content_type, self.csv_account
+            )
+            statement = StatementImport.objects.get()
+            delay.assert_called_once_with(statement.pk)
+            self.assertEqual(statement.parser_name, "csv_generic")
+
+        process_statement_import(statement)
+
+        statement.refresh_from_db()
+        self.assertEqual(statement.status, StatementImport.Status.REVIEW)
+        self.assertEqual(statement.reconciliation_status, StatementImport.ReconciliationStatus.BALANCED)
+        item = statement.transactions.get()
+        self.assertEqual((item.counterparty, str(item.amount)), ("Testshop", "-20.00"))
+
+    def test_format_must_match_the_account(self):
+        from .models import Document
+
+        response, delay = self.upload(
+            "umsaetze.csv", self.CSV.encode(), "text/csv", self.pdf_account
+        )
+        self.assertContains(response, "ING Deutschland (PDF)")
+        self.assertFalse(Document.objects.exists())
+        delay.assert_not_called()
+
+        response, _ = self.upload("auszug.pdf", b"%PDF-1.4 x", "application/pdf", self.csv_account)
+        self.assertContains(response, "CSV-Export")
+        self.assertFalse(Document.objects.exists())
+
+    def test_csv_is_not_accepted_as_receipt_or_with_binary_content(self):
+        from .models import Document
+
+        response, _ = self.upload(
+            "beleg.csv", self.CSV.encode(), "text/csv", self.csv_account, kind="receipt"
+        )
+        self.assertContains(response, "nur als Kontoauszug")
+        response, _ = self.upload(
+            "binaer.csv", b"a;b\x00c", "text/csv", self.csv_account
+        )
+        self.assertContains(response, "Binärdaten")
+        self.assertFalse(Document.objects.exists())

@@ -9,6 +9,7 @@ from django.core.exceptions import ValidationError
 from django.forms import modelformset_factory
 from django.utils.formats import number_format
 
+from .importers import get_parser
 from .periods import booked_months, month_choices
 from .models import (
     Account, Budget, CategorizationRule, Category, Document, EmailImportConfig, Person, Tag, Transaction,
@@ -22,11 +23,17 @@ def tag_checkbox_widget():
 class AccountForm(forms.ModelForm):
     class Meta:
         model = Account
-        fields = ["name", "iban_last_four"]
+        fields = ["name", "iban_last_four", "import_format"]
         labels = {
             "name": "Kontoname",
             "iban_last_four": "Letzte vier Stellen der IBAN (optional)",
+            "import_format": "Format der Kontoauszüge",
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Ohne Angabe bleibt das bisherige (bzw. das Standard-)Format erhalten.
+        self.fields["import_format"].required = False
 
     def clean_iban_last_four(self):
         value = self.cleaned_data["iban_last_four"].strip()
@@ -140,12 +147,20 @@ class DocumentUploadForm(forms.ModelForm):
         uploaded = self.cleaned_data["file"]
         if uploaded.size > 30 * 1024 * 1024:
             raise forms.ValidationError("Die Datei darf höchstens 30 MB groß sein.")
-        if uploaded.content_type not in {"application/pdf", "image/jpeg", "image/png"}:
+        is_csv = uploaded.name.lower().endswith(".csv")
+        if is_csv:
+            # Browser melden CSV-Dateien uneinheitlich; maßgeblich sind Endung und Inhalt.
+            if b"\x00" in uploaded.read(8192):
+                raise forms.ValidationError("Die CSV-Datei enthält Binärdaten.")
+            uploaded.seek(0)
+        elif uploaded.content_type not in {"application/pdf", "image/jpeg", "image/png"}:
             raise forms.ValidationError("Erlaubt sind PDF-, JPEG- und PNG-Dateien.")
         header = uploaded.read(12)
         uploaded.seek(0)
         detected_type = None
-        if header.startswith(b"%PDF-"):
+        if is_csv:
+            detected_type = uploaded.content_type
+        elif header.startswith(b"%PDF-"):
             detected_type = "application/pdf"
         elif header.startswith(b"\xff\xd8\xff"):
             detected_type = "image/jpeg"
@@ -169,8 +184,17 @@ class DocumentUploadForm(forms.ModelForm):
             if not cleaned.get("account"):
                 self.add_error("account", "Für einen Kontoauszug muss ein Konto gewählt werden.")
             uploaded = cleaned.get("file")
-            if uploaded and uploaded.content_type != "application/pdf":
-                self.add_error("file", "Kontoauszüge müssen als PDF hochgeladen werden.")
+            account = cleaned.get("account")
+            if uploaded and account:
+                parser = get_parser(account.import_format)
+                if not uploaded.name.lower().endswith(parser.file_extension):
+                    self.add_error(
+                        "file",
+                        f"Für dieses Konto sind Kontoauszüge im Format „{parser.label}“ "
+                        f"({parser.file_extension}) erforderlich.",
+                    )
+        elif cleaned.get("file") and cleaned["file"].name.lower().endswith(".csv"):
+            self.add_error("file", "CSV-Dateien können nur als Kontoauszug importiert werden.")
         return cleaned
 
 

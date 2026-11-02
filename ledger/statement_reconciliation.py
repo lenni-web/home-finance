@@ -1,7 +1,7 @@
 from decimal import Decimal
 from pathlib import Path
 
-from .importers import INGStatementParser
+from .importers import get_parser
 from .models import StatementImport
 
 
@@ -24,7 +24,7 @@ def store_reconciliation(statement, parsed_statement):
 
 
 def recalculate_statement(statement):
-    parsed_statement = INGStatementParser().parse_statement_pdf(
+    parsed_statement = get_parser(statement.parser_name)().parse_statement(
         Path(statement.document.file.path)
     )
     return store_reconciliation(statement, parsed_statement)
