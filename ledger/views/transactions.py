@@ -10,8 +10,7 @@ from ..models import CategorizationRule, Transaction
 from ..rules import categorization_suggestions
 
 
-@login_required
-def transaction_overview(request):
+def _filtered_transactions(request):
     queryset = (
         Transaction.objects.filter(reviewed=True)
         .select_related(
@@ -52,8 +51,10 @@ def transaction_overview(request):
                 | Q(description__icontains=values["q"])
                 | Q(comment__icontains=values["q"])
             )
-    queryset = queryset.distinct()
-    transaction_count = queryset.count()
+    return queryset.distinct(), filters
+
+
+def _paginate_transactions(request, queryset, transaction_count):
     per_page = request.GET.get("per_page", "30")
     if per_page not in {"30", "50", "100", "all"}:
         per_page = "30"
@@ -90,64 +91,92 @@ def transaction_overview(request):
         per_page_options.append({
             "value": value, "label": label, "url": f"?{params.urlencode()}",
         })
+    return {
+        "display_queryset": display_queryset,
+        "page_obj": page_obj,
+        "pagination_links": pagination_links,
+        "displayed_from": displayed_from,
+        "displayed_to": displayed_to,
+        "per_page": per_page,
+        "per_page_options": per_page_options,
+    }
+
+
+def _apply_bulk_action(request, queryset, bulk_form):
+    """Wendet die Sammelzuordnung an; gibt eine Weiterleitung oder ``None`` zurück."""
+    selected_ids = request.POST.getlist("selected")
+    selected = queryset.filter(pk__in=selected_ids)
+    bulk = bulk_form.cleaned_data
+    if not selected_ids:
+        messages.error(request, "Bitte mindestens eine Buchung auswählen.")
+        return None
+    for item in selected:
+        if bulk.get("category"):
+            item.category = bulk["category"]
+            item.save(update_fields=["category", "updated_at"])
+        if bulk.get("transfer_action") == "mark":
+            item.is_internal_transfer = True
+            item.save(update_fields=["is_internal_transfer", "updated_at"])
+        elif bulk.get("transfer_action") == "unmark":
+            unlink_transfer(item)
+        item.tags.add(*bulk["tags"])
+        item.tags.remove(*bulk["remove_tags"])
+        item.people.add(*bulk["people"])
+    if bulk.get("create_rules"):
+        _create_rules_from_transactions(selected, bulk)
+    messages.success(request, f"{selected.count()} Buchungen wurden bearbeitet.")
+    return redirect(request.get_full_path())
+
+
+def _handle_post(request, queryset, formset, bulk_form):
+    """Verarbeitet das Formular; gibt eine Weiterleitung oder ``None`` zurück."""
+    action = request.POST.get("action")
+    if action and action.startswith("confirm_transfer:"):
+        try:
+            first_id, second_id = map(int, action.split(":")[1:])
+            first = queryset.get(pk=first_id)
+            second = Transaction.objects.select_related("statement_import__account").get(
+                pk=second_id, reviewed=True
+            )
+            link_transfer_pair(first, second)
+            messages.success(request, "Die beiden Buchungen wurden als Umbuchung verknüpft.")
+        except (ValueError, Transaction.DoesNotExist):
+            messages.error(request, "Dieses Umbuchungspaar ist nicht mehr gültig.")
+        return redirect(request.get_full_path())
+    if not (formset.is_valid() and bulk_form.is_valid()):
+        return None
+    formset.save()
+    for form in formset.forms:
+        if "is_internal_transfer" in form.changed_data and not form.instance.is_internal_transfer:
+            unlink_transfer(form.instance)
+    if action == "bulk":
+        return _apply_bulk_action(request, queryset, bulk_form)
+    messages.success(request, "Zuordnungen wurden gespeichert.")
+    return redirect(request.get_full_path())
+
+
+@login_required
+def transaction_overview(request):
+    queryset, filters = _filtered_transactions(request)
+    transaction_count = queryset.count()
+    paging = _paginate_transactions(request, queryset, transaction_count)
+    display_queryset = paging.pop("display_queryset")
 
     if request.method == "POST":
         formset = TransactionCategorizationFormSet(
             request.POST, queryset=display_queryset, prefix="transactions"
         )
         bulk_form = BulkCategorizationForm(request.POST, prefix="bulk")
-        action = request.POST.get("action")
-        if action and action.startswith("confirm_transfer:"):
-            try:
-                first_id, second_id = map(int, action.split(":")[1:])
-                first = queryset.get(pk=first_id)
-                second = Transaction.objects.select_related("statement_import__account").get(
-                    pk=second_id, reviewed=True
-                )
-                link_transfer_pair(first, second)
-                messages.success(request, "Die beiden Buchungen wurden als Umbuchung verknüpft.")
-            except (ValueError, Transaction.DoesNotExist):
-                messages.error(request, "Dieses Umbuchungspaar ist nicht mehr gültig.")
-            return redirect(request.get_full_path())
-        if formset.is_valid() and bulk_form.is_valid():
-            formset.save()
-            for form in formset.forms:
-                if "is_internal_transfer" in form.changed_data and not form.instance.is_internal_transfer:
-                    unlink_transfer(form.instance)
-            if action == "bulk":
-                selected_ids = request.POST.getlist("selected")
-                selected = queryset.filter(pk__in=selected_ids)
-                bulk = bulk_form.cleaned_data
-                if not selected_ids:
-                    messages.error(request, "Bitte mindestens eine Buchung auswählen.")
-                else:
-                    for item in selected:
-                        if bulk.get("category"):
-                            item.category = bulk["category"]
-                            item.save(update_fields=["category", "updated_at"])
-                        if bulk.get("transfer_action") == "mark":
-                            item.is_internal_transfer = True
-                            item.save(update_fields=["is_internal_transfer", "updated_at"])
-                        elif bulk.get("transfer_action") == "unmark":
-                            unlink_transfer(item)
-                        item.tags.add(*bulk["tags"])
-                        item.tags.remove(*bulk["remove_tags"])
-                        item.people.add(*bulk["people"])
-                    if bulk.get("create_rules"):
-                        _create_rules_from_transactions(selected, bulk)
-                    messages.success(request, f"{selected.count()} Buchungen wurden bearbeitet.")
-                    return redirect(request.get_full_path())
-            else:
-                messages.success(request, "Zuordnungen wurden gespeichert.")
-                return redirect(request.get_full_path())
+        response = _handle_post(request, queryset, formset, bulk_form)
+        if response:
+            return response
     else:
         formset = TransactionCategorizationFormSet(
             queryset=display_queryset, prefix="transactions"
         )
         bulk_form = BulkCategorizationForm(prefix="bulk")
 
-    report_queryset = queryset.filter(is_internal_transfer=False)
-    totals = report_queryset.aggregate(
+    totals = queryset.filter(is_internal_transfer=False).aggregate(
         income=Sum("amount", filter=Q(amount__gt=0), default=0),
         expenses=Sum("amount", filter=Q(amount__lt=0), default=0),
         balance=Sum("amount", default=0),
@@ -166,12 +195,7 @@ def transaction_overview(request):
         "bulk_form": bulk_form,
         "totals": totals,
         "transaction_count": transaction_count,
-        "displayed_from": displayed_from,
-        "displayed_to": displayed_to,
-        "per_page": per_page,
-        "per_page_options": per_page_options,
-        "page_obj": page_obj,
-        "pagination_links": pagination_links,
+        **paging,
         "uncategorized_count": queryset.filter(
             category__isnull=True, is_internal_transfer=False
         ).count(),

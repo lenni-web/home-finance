@@ -1,4 +1,5 @@
 import os
+import sys
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
@@ -63,7 +64,10 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"
+        # Tests laufen ohne vorheriges collectstatic und brauchen daher kein Manifest.
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
+        if sys.argv[1:2] == ["test"]
+        else "whitenoise.storage.CompressedManifestStaticFilesStorage"
     },
 }
 MEDIA_ROOT = BASE_DIR / "media"

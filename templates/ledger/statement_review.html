@@ -1,11 +1,4 @@
-{% load ledger_format static %}<!doctype html>
-<html lang="de">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Kontoauszug prüfen</title>
-  <link rel="stylesheet" href="/static/ledger/app.css">
-  <style>
+{% extends "ledger/base.html" %}{% load ledger_format static %}{% block title %}Kontoauszug prüfen{% endblock %}{% block page_style %}<style>
     :root { font-family: system-ui, sans-serif; color: #1f2937; background: #f8fafc; }
     body { margin: auto; padding: 1.5rem; max-width: 1500px; }
     header { display: flex; justify-content: space-between; align-items: start; gap: 1rem; }
@@ -21,10 +14,7 @@
     .save { background: #e2e8f0; color: #1f2937; }
     .confirm { background: #0f766e; color: white; }
     .errorlist { color: #b91c1c; margin: .25rem 0; padding-left: 1rem; }
-  </style>
-</head>
-<body>
-  <header class="app-page-header"><div class="app-page-heading"><h1>Kontoauszug prüfen</h1><p>{{ statement.account }} · {{ transaction_count }} Buchungen · Status: {{ statement.get_status_display }}</p></div>{% include "ledger/_navigation.html" %}</header>
+  </style>{% endblock %}{% block content %}  <header class="app-page-header"><div class="app-page-heading"><h1>Kontoauszug prüfen</h1><p>{{ statement.account }} · {{ transaction_count }} Buchungen · Status: {{ statement.get_status_display }}</p></div>{% include "ledger/_navigation.html" %}</header>
   {% for message in messages %}<div class="card">{{ message }}</div>{% endfor %}
   <section class="card"><h2>Saldo-Prüfung: {{ statement.get_reconciliation_status_display }}</h2>{% if statement.reconciliation_status != "unavailable" %}<p>Anfangssaldo: {{ statement.opening_balance|money }} € · Summe der Buchungen: {{ statement.transaction_total|money }} € · Endsaldo: {{ statement.closing_balance|money }} €</p><p>{% if statement.reconciliation_status == "balanced" %}✓ Der Kontoauszug ist rechnerisch ausgeglichen.{% else %}⚠ Abweichung: {{ statement.reconciliation_difference|money }} €. Bitte Buchungen vor der Bestätigung prüfen.{% endif %}</p>{% else %}<p>Anfangs- oder Endsaldo konnte nicht sicher erkannt werden.</p>{% endif %}</section>
   <form method="post">{% csrf_token %}{{ formset.management_form }}{{ formset.non_form_errors }}
@@ -41,5 +31,4 @@
       </tr>{% endfor %}
     </tbody></table></div>
     {% if statement.status == "review" %}<div class="actions"><button class="save" name="action" value="save">Zwischenstand speichern</button><button class="confirm" name="action" value="confirm">Alle Buchungen bestätigen</button></div>{% endif %}
-  </form>
-</body></html>
+  </form>{% endblock %}

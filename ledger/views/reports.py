@@ -1,16 +1,19 @@
 import re
-from calendar import monthrange
 from datetime import date
 from decimal import Decimal
 from urllib.parse import urlencode
 
 from django.contrib.auth.decorators import login_required
-from django.db.models import DecimalField, Q, Sum, Value
+from django.db.models import Q, Sum
 from django.db.models.functions import Coalesce, TruncMonth
 from django.shortcuts import render
 
 from ..forms import AnalyticsFilterForm, DocumentUploadForm
 from ..models import Document, StatementImport, Transaction
+from ..periods import (
+    ZERO, financial_transactions, income_expense_totals, latest_booking_date, month_end,
+    parse_month, previous_month,
+)
 
 
 @login_required
@@ -22,39 +25,13 @@ def dashboard(request):
         .order_by("-month")
         .distinct()
     )
-    latest_date = Transaction.objects.filter(reviewed=True).order_by("-booking_date").values_list(
-        "booking_date", flat=True
-    ).first()
-    selected_month = request.GET.get("month")
-    try:
-        year, month = map(int, selected_month.split("-")) if selected_month else (
-            (latest_date or date.today()).year, (latest_date or date.today()).month
-        )
-        month_start = date(year, month, 1)
-    except (AttributeError, TypeError, ValueError):
-        month_start = date((latest_date or date.today()).year, (latest_date or date.today()).month, 1)
-    month_end = date(month_start.year, month_start.month, monthrange(month_start.year, month_start.month)[1])
-    if month_start.month == 1:
-        previous_start = date(month_start.year - 1, 12, 1)
-    else:
-        previous_start = date(month_start.year, month_start.month - 1, 1)
-    previous_end = month_start.fromordinal(month_start.toordinal() - 1)
+    month_start = parse_month(request.GET.get("month"), latest_booking_date())
+    previous_start = previous_month(month_start)
 
-    current = Transaction.objects.filter(
-        reviewed=True, booking_date__range=(month_start, month_end)
-    ).filter(is_internal_transfer=False)
-    previous = Transaction.objects.filter(
-        reviewed=True, booking_date__range=(previous_start, previous_end)
-    ).filter(is_internal_transfer=False)
-    zero = Value(Decimal("0.00"), output_field=DecimalField())
-    totals = current.aggregate(
-        income=Coalesce(Sum("amount", filter=Q(amount__gt=0)), zero),
-        expenses=Coalesce(Sum("amount", filter=Q(amount__lt=0)), zero),
-        balance=Coalesce(Sum("amount"), zero),
-    )
-    previous_expenses = abs(previous.aggregate(
-        value=Coalesce(Sum("amount", filter=Q(amount__lt=0)), zero)
-    )["value"])
+    current = financial_transactions(month_start, month_end(month_start))
+    previous = financial_transactions(previous_start, month_end(previous_start))
+    totals = income_expense_totals(current)
+    previous_expenses = abs(income_expense_totals(previous)["expenses"])
     current_expenses = abs(totals["expenses"])
     expense_change = None
     if previous_expenses:
@@ -139,10 +116,7 @@ def _chart_items(groups, total, period_params, account_id, filter_name):
 
 @login_required
 def analytics(request):
-    latest_date = Transaction.objects.filter(reviewed=True).order_by("-booking_date").values_list(
-        "booking_date", flat=True
-    ).first()
-    fallback = latest_date or date.today()
+    fallback = latest_booking_date()
     filters = AnalyticsFilterForm(request.GET or {
         "period": "month", "month": fallback.strftime("%Y-%m"), "year": fallback.year,
     })
@@ -155,12 +129,8 @@ def analytics(request):
         selected_month = filters.cleaned_data.get("month") or selected_month
         selected_year = filters.cleaned_data.get("year") or selected_year
         account = filters.cleaned_data.get("account")
-    try:
-        year, month = map(int, selected_month.split("-"))
-        month_start = date(year, month, 1)
-    except (AttributeError, TypeError, ValueError):
-        month_start = date(fallback.year, fallback.month, 1)
-        selected_month = month_start.strftime("%Y-%m")
+    month_start = parse_month(selected_month, fallback)
+    selected_month = month_start.strftime("%Y-%m")
     if period == "year":
         period_start = date(selected_year, 1, 1)
         period_end = date(selected_year, 12, 31)
@@ -168,23 +138,12 @@ def analytics(request):
     else:
         period = "month"
         period_start = month_start
-        period_end = date(
-            month_start.year, month_start.month,
-            monthrange(month_start.year, month_start.month)[1],
-        )
+        period_end = month_end(month_start)
         period_params = {"month": selected_month}
-    financial_queryset = Transaction.objects.filter(
-        reviewed=True, is_internal_transfer=False,
-        booking_date__range=(period_start, period_end),
-    )
+    financial_queryset = financial_transactions(period_start, period_end)
     if account:
         financial_queryset = financial_queryset.filter(statement_import__account=account)
-    zero = Value(Decimal("0.00"), output_field=DecimalField())
-    totals = financial_queryset.aggregate(
-        income=Coalesce(Sum("amount", filter=Q(amount__gt=0)), zero),
-        expenses=Coalesce(Sum("amount", filter=Q(amount__lt=0)), zero),
-        balance=Coalesce(Sum("amount"), zero),
-    )
+    totals = income_expense_totals(financial_queryset)
     queryset = financial_queryset.filter(amount__lt=0).select_related(
         "category", "statement_import__account"
     ).prefetch_related("people")
@@ -229,8 +188,8 @@ def analytics(request):
             for item in financial_queryset.annotate(month=TruncMonth("booking_date"))
             .values("month")
             .annotate(
-                income=Coalesce(Sum("amount", filter=Q(amount__gt=0)), zero),
-                expenses=Coalesce(Sum("amount", filter=Q(amount__lt=0)), zero),
+                income=Coalesce(Sum("amount", filter=Q(amount__gt=0)), ZERO),
+                expenses=Coalesce(Sum("amount", filter=Q(amount__lt=0)), ZERO),
             )
         }
         max_monthly_expenses = max(

@@ -1,11 +1,4 @@
-{% load ledger_format static %}<!doctype html>
-<html lang="de">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Buchungsübersicht</title>
-  <link rel="stylesheet" href="/static/ledger/app.css">
-  <style>
+{% extends "ledger/base.html" %}{% load ledger_format static %}{% block title %}Buchungsübersicht{% endblock %}{% block page_style %}<style>
     :root { font-family: system-ui, sans-serif; color: #1f2937; background: #f8fafc; }
     body { margin: auto; padding: 1.5rem; max-width: 1600px; }
     header, .summary, .filters, .bulk-grid { display: flex; gap: 1rem; align-items: start; }
@@ -40,10 +33,7 @@
     .pagination .disabled { color:#94a3b8; }
     .messages { border-left: 4px solid #0f766e; }
     @media (max-width: 800px) { header, .summary, .filters, .bulk-grid { display: block; } .metric { margin-bottom: .7rem; } }
-  </style>
-</head>
-<body>
-  <header class="app-page-header"><div class="app-page-heading"><h1>Buchungen</h1><p>{{ transaction_count }} Buchungen, davon {{ uncategorized_count }} ohne Kategorie und {{ transfer_count }} interne Umbuchungen</p></div>{% include "ledger/_navigation.html" %}</header>
+  </style>{% endblock %}{% block content %}  <header class="app-page-header"><div class="app-page-heading"><h1>Buchungen</h1><p>{{ transaction_count }} Buchungen, davon {{ uncategorized_count }} ohne Kategorie und {{ transfer_count }} interne Umbuchungen</p></div>{% include "ledger/_navigation.html" %}</header>
   {% for message in messages %}<div class="card messages">{{ message }}</div>{% endfor %}
   <section class="summary">
     <div class="card metric">Einnahmen<strong class="positive">{{ totals.income|money }} €</strong></div>
@@ -68,5 +58,4 @@
       </tr>{% empty %}<tr><td colspan="10">Keine Buchungen für diesen Filter.</td></tr>{% endfor %}
     </tbody></table>{% if page_obj and page_obj.paginator.num_pages > 1 %}<nav class="pagination" aria-label="Seitennavigation">{% if page_obj.has_previous %}<a href="{% querystring page=page_obj.previous_page_number %}">← Zurück</a>{% else %}<span class="disabled">← Zurück</span>{% endif %}{% for link in pagination_links %}{% if link.ellipsis %}<span>…</span>{% elif link.current %}<span class="current" aria-current="page">{{ link.number }}</span>{% else %}<a href="{{ link.url }}">{{ link.number }}</a>{% endif %}{% endfor %}{% if page_obj.has_next %}<a href="{% querystring page=page_obj.next_page_number %}">Weiter →</a>{% else %}<span class="disabled">Weiter →</span>{% endif %}</nav>{% endif %}<div class="table-footer"><span class="muted">{{ displayed_from }}–{{ displayed_to }} von {{ transaction_count }} Buchungen angezeigt</span><label>Einträge anzeigen <select onchange="window.location.href=this.value">{% for option in per_page_options %}<option value="{{ option.url }}" {% if option.value == per_page %}selected{% endif %}>{{ option.label }}</option>{% endfor %}</select></label></div></section>
     <div class="actions"><button class="secondary" name="action" value="inline_save">Einzelne Zuordnungen speichern</button></div>
-  </form>
-</body></html>
+  </form>{% endblock %}

@@ -1,11 +1,4 @@
-{% load static %}<!doctype html>
-<html lang="de">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Einstellungen · Ausgabenarchiv</title>
-  <link rel="stylesheet" href="/static/ledger/app.css">
-  <style>
+{% extends "ledger/base.html" %}{% load static %}{% block title %}Einstellungen · Ausgabenarchiv{% endblock %}{% block page_style %}<style>
     :root { font-family:Inter,ui-sans-serif,system-ui,sans-serif; color:#172033; background:#f1f5f9; }
     * { box-sizing:border-box; } body { max-width:1180px; margin:auto; padding:1.5rem; }
     header { display:flex; justify-content:space-between; align-items:flex-start; gap:1.5rem; margin-bottom:1.5rem; }
@@ -27,10 +20,7 @@
     .actions { display:flex; flex-wrap:wrap; gap:.5rem; } button.secondary { margin-top:1rem; padding:.72rem 1rem; border:1px solid #cbd5e1; border-radius:9px; background:#f8fafc; color:#334155; font-weight:700; cursor:pointer; }
     .status { display:inline-block; padding:.25rem .55rem; border-radius:999px; background:#e2e8f0; font-size:.8rem; } .status.on { background:#dcfce7;color:#166534; }.error{color:#b91c1c;white-space:pre-wrap}.helptext{display:block;color:#64748b;font-size:.8rem;margin-top:.2rem}.errorlist{color:#b91c1c}
     @media(max-width:800px){body{padding:1rem} header{display:block}.grid{grid-template-columns:1fr}.table-wrap{overflow:auto}}
-  </style>
-</head>
-<body>
-  <header class="app-page-header"><div class="app-page-heading"><h1>Einstellungen</h1><p>Konten, E-Mail-Import und Systemzugang verwalten.</p></div>{% include "ledger/_navigation.html" %}</header>
+  </style>{% endblock %}{% block content %}  <header class="app-page-header"><div class="app-page-heading"><h1>Einstellungen</h1><p>Konten, E-Mail-Import und Systemzugang verwalten.</p></div>{% include "ledger/_navigation.html" %}</header>
   {% for message in messages %}<div class="card message">{{ message }}</div>{% endfor %}
   <p><a class="button-link" href="{% url 'operational_status' %}">Betriebsstatus öffnen</a></p>
   <div class="grid">
@@ -53,6 +43,4 @@
     {% if email_config.last_error %}<p class="error"><strong>Letzter Fehler:</strong> {{ email_config.last_error }}</p>{% endif %}
     <form method="post" action="{% url 'save_email_settings' %}">{% csrf_token %}<div class="email-grid">{{ email_form.as_p }}</div><div class="actions"><button class="primary" name="action" value="save">Einstellungen speichern</button><button class="secondary" name="action" value="test">Speichern und Verbindung testen</button><button class="secondary" name="action" value="fetch">Speichern und jetzt abrufen</button></div></form>
   </section>
-  <section class="card email-card table-wrap"><h2>Letzte E-Mail-Abrufe</h2><table><thead><tr><th>Zeit</th><th>Absender</th><th>Betreff</th><th>Anhänge</th><th>Ergebnis</th></tr></thead><tbody>{% for item in email_imports %}<tr><td>{{ item.created_at|date:"d.m.Y H:i" }}</td><td>{{ item.sender|default:"–" }}</td><td>{{ item.subject|default:"–" }}</td><td>{{ item.attachment_count }}</td><td>{% if item.error_message %}<span class="error">{{ item.error_message }}</span>{% else %}Übernommen{% endif %}</td></tr>{% empty %}<tr><td colspan="5" class="empty">Noch keine E-Mails verarbeitet.</td></tr>{% endfor %}</tbody></table></section>
-</body>
-</html>
+  <section class="card email-card table-wrap"><h2>Letzte E-Mail-Abrufe</h2><table><thead><tr><th>Zeit</th><th>Absender</th><th>Betreff</th><th>Anhänge</th><th>Ergebnis</th></tr></thead><tbody>{% for item in email_imports %}<tr><td>{{ item.created_at|date:"d.m.Y H:i" }}</td><td>{{ item.sender|default:"–" }}</td><td>{{ item.subject|default:"–" }}</td><td>{{ item.attachment_count }}</td><td>{% if item.error_message %}<span class="error">{{ item.error_message }}</span>{% else %}Übernommen{% endif %}</td></tr>{% empty %}<tr><td colspan="5" class="empty">Noch keine E-Mails verarbeitet.</td></tr>{% endfor %}</tbody></table></section>{% endblock %}
