@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from django.db import transaction as db_transaction
 from django.db.models import F
 
-from .models import CategorizationRule, Transaction
+from .models import CategorizationRule, Category, Transaction
 from .text_normalization import normalize_comparison_text
 
 
@@ -65,41 +65,89 @@ def matching_rules(transaction, *, auto_only=False):
     return [rule for rule in rules.order_by("-priority", "name") if rule.matches(transaction)]
 
 
-def categorization_suggestion(transaction):
-    rules = matching_rules(transaction)
-    if rules:
-        rule = rules[0]
-        specificity = min(len(normalize_merchant(rule.match_text)) * 2, 25)
-        return RuleSuggestion(
-            category=rule.category,
-            confidence=min(99, 70 + specificity),
-            source="Regel",
-            sample_count=rule.times_applied,
-            rule=rule,
-        )
+def _rule_suggestion(rule):
+    specificity = min(len(normalize_merchant(rule.match_text)) * 2, 25)
+    return RuleSuggestion(
+        category=rule.category,
+        confidence=min(99, 70 + specificity),
+        source="Regel",
+        sample_count=rule.times_applied,
+        rule=rule,
+    )
 
-    merchant_key = normalize_merchant(transaction.counterparty)
-    if not merchant_key or is_payment_intermediary(transaction.counterparty):
+
+def categorization_suggestions(transactions):
+    """Suggest categories for many transactions with a constant number of queries.
+
+    Returns ``{transaction.pk: RuleSuggestion | None}``. Rules and the learned merchant
+    statistics are loaded once instead of once per transaction.
+    """
+    transactions = list(transactions)
+    if not transactions:
+        return {}
+    rules = list(
+        CategorizationRule.objects.filter(active=True).select_related("category")
+        .order_by("-priority", "name")
+    )
+
+    learned = None  # wird erst bei der ersten Buchung ohne Regeltreffer aufgebaut
+    suggestions = {}
+    for transaction in transactions:
+        rule = next((rule for rule in rules if rule.matches(transaction)), None)
+        if rule:
+            suggestions[transaction.pk] = _rule_suggestion(rule)
+            continue
+        merchant_key = normalize_merchant(transaction.counterparty)
+        if not merchant_key or is_payment_intermediary(transaction.counterparty):
+            suggestions[transaction.pk] = None
+            continue
+        if learned is None:
+            learned = _learned_merchants()
+        suggestions[transaction.pk] = _learned_suggestion(learned, transaction, merchant_key)
+    return suggestions
+
+
+def _learned_merchants():
+    counts = {}
+    entries = {}
+    rows = Transaction.objects.filter(reviewed=True, category__isnull=False).values_list(
+        "pk", "counterparty", "category_id"
+    )
+    for pk, counterparty, category_id in rows:
+        key = normalize_merchant(counterparty)
+        if not key:
+            continue
+        entries[pk] = (key, category_id)
+        by_category = counts.setdefault(key, {})
+        by_category[category_id] = by_category.get(category_id, 0) + 1
+    categories = Category.objects.in_bulk({category_id for _key, category_id in entries.values()})
+    return counts, categories, entries
+
+
+def _learned_suggestion(learned, transaction, merchant_key):
+    counts, categories, entries = learned
+    category_counts = dict(counts.get(merchant_key, {}))
+    own = entries.get(transaction.pk)
+    if own and own[0] == merchant_key:
+        # Die Buchung selbst darf ihren Vorschlag nicht mitbestimmen.
+        category_counts[own[1]] -= 1
+        if not category_counts[own[1]]:
+            del category_counts[own[1]]
+    total = sum(category_counts.values())
+    if total < MIN_LEARNING_SAMPLES:
         return None
-    candidates = Transaction.objects.filter(
-        reviewed=True, category__isnull=False
-    ).exclude(pk=transaction.pk).select_related("category")
-    same_merchant = [item for item in candidates if normalize_merchant(item.counterparty) == merchant_key]
-    if len(same_merchant) < MIN_LEARNING_SAMPLES:
-        return None
-    category_counts = {}
-    categories = {}
-    for item in same_merchant:
-        category_counts[item.category_id] = category_counts.get(item.category_id, 0) + 1
-        categories[item.category_id] = item.category
     category_id, count = max(category_counts.items(), key=lambda pair: pair[1])
-    confidence = round(count / len(same_merchant) * 100)
+    confidence = round(count / total * 100)
     if confidence < 60:
         return None
     return RuleSuggestion(
         category=categories[category_id], confidence=confidence,
-        source="Bestätigte Buchungen", sample_count=len(same_merchant),
+        source="Bestätigte Buchungen", sample_count=total,
     )
+
+
+def categorization_suggestion(transaction):
+    return categorization_suggestions([transaction])[transaction.pk]
 
 
 def apply_categorization_rules(transaction):

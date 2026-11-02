@@ -31,6 +31,46 @@ def transfer_candidates(item, *, days=3):
     )
 
 
+def best_transfer_candidates(items, *, days=3, chunk_size=500):
+    """Return ``{item.pk: best opposite entry | None}`` using one query per chunk."""
+    items = [item for item in items if item.reviewed and item.amount]
+    result = {item.pk: None for item in items}
+    for start in range(0, len(items), chunk_size):
+        chunk = items[start:start + chunk_size]
+        window = timedelta(days=days)
+        pool = (
+            Transaction.objects.filter(
+                reviewed=True,
+                transfer_counterpart__isnull=True,
+                amount__in={-Decimal(item.amount) for item in chunk},
+                booking_date__range=(
+                    min(item.booking_date for item in chunk) - window,
+                    max(item.booking_date for item in chunk) + window,
+                ),
+            )
+            .select_related("statement_import__account")
+        )
+        by_amount = {}
+        for candidate in pool:
+            by_amount.setdefault(Decimal(candidate.amount), []).append(candidate)
+        for item in chunk:
+            matches = [
+                candidate for candidate in by_amount.get(-Decimal(item.amount), [])
+                if candidate.pk != item.pk
+                and candidate.currency == item.currency
+                and abs((candidate.booking_date - item.booking_date).days) <= days
+                and candidate.statement_import.account_id != item.statement_import.account_id
+            ]
+            if matches:
+                result[item.pk] = min(
+                    matches,
+                    key=lambda candidate: (
+                        abs((candidate.booking_date - item.booking_date).days), candidate.pk
+                    ),
+                )
+    return result
+
+
 def best_transfer_candidate(item):
     candidates = transfer_candidates(item)
     return candidates[0] if candidates else None

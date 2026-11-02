@@ -151,3 +151,91 @@ class DocumentArchiveQueryTests(TestCase):
         for group in response.context["archive_groups"]:
             for document in group["page"].object_list:
                 self.assertIn("extracted_text", document.get_deferred_fields())
+
+
+class BatchSuggestionTests(TestCase):
+    def setUp(self):
+        from datetime import date
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from .models import Account, Category, Document, StatementImport, Transaction
+
+        self.Transaction = Transaction
+        self.food = Category.objects.create(name="Essen")
+        self.other = Category.objects.create(name="Sonstiges")
+        document = Document.objects.create(
+            kind=Document.Kind.BANK_STATEMENT, original_filename="b.pdf",
+            file=SimpleUploadedFile("b.pdf", b"%PDF-batch", "application/pdf"),
+        )
+        self.giro = Account.objects.create(name="Giro")
+        self.tages = Account.objects.create(name="Tagesgeld")
+        self.statement = StatementImport.objects.create(document=document, account=self.giro)
+        other_document = Document.objects.create(
+            kind=Document.Kind.BANK_STATEMENT, original_filename="c.pdf",
+            file=SimpleUploadedFile("c.pdf", b"%PDF-batch2", "application/pdf"),
+        )
+        self.other_statement = StatementImport.objects.create(
+            document=other_document, account=self.tages
+        )
+        self.date = date(2026, 6, 10)
+        self.counter = 0
+
+    def make(self, counterparty="Bäckerei Müller", amount="-5.00", category=None,
+             statement=None, day_offset=0):
+        from datetime import timedelta
+
+        self.counter += 1
+        return self.Transaction.objects.create(
+            statement_import=statement or self.statement,
+            booking_date=self.date + timedelta(days=day_offset), counterparty=counterparty,
+            amount=amount, category=category, reviewed=True,
+            source_fingerprint=f"{self.counter:064d}",
+        )
+
+    def test_batch_equals_single_calls_and_excludes_own_category(self):
+        from .rules import categorization_suggestion, categorization_suggestions
+
+        learned = [self.make(category=self.food) for _ in range(3)]
+        fresh = self.make()
+        unknown = self.make(counterparty="Niemand")
+
+        batch = categorization_suggestions([*learned, fresh, unknown])
+
+        self.assertEqual(batch[fresh.pk].category, self.food)
+        self.assertEqual(batch[fresh.pk].sample_count, 3)
+        self.assertIsNone(batch[unknown.pk])
+        # Zwei übrige Beispiele reichen für eine bereits kategorisierte Buchung nicht.
+        self.assertIsNone(batch[learned[0].pk])
+        for item in [*learned, fresh, unknown]:
+            single = categorization_suggestion(item)
+            self.assertEqual(
+                (single.category, single.sample_count) if single else None,
+                (batch[item.pk].category, batch[item.pk].sample_count) if batch[item.pk] else None,
+            )
+
+    def test_suggestions_use_constant_queries(self):
+        from .rules import categorization_suggestions
+
+        for _ in range(3):
+            self.make(category=self.food)
+        items = [self.make() for _ in range(20)]
+
+        with self.assertNumQueries(3):
+            categorization_suggestions(items)
+
+    def test_batch_transfer_candidates_match_single_lookup(self):
+        from .internal_transfers import best_transfer_candidate, best_transfer_candidates
+
+        out = self.make(counterparty="Umbuchung", amount="-100.00")
+        near = self.make(counterparty="Gegen", amount="100.00", statement=self.other_statement, day_offset=2)
+        self.make(counterparty="Zu weit", amount="100.00", statement=self.other_statement, day_offset=9)
+        self.make(counterparty="Gleiches Konto", amount="100.00", day_offset=1)
+
+        batch = best_transfer_candidates([out, near])
+
+        self.assertEqual(batch[out.pk], near)
+        self.assertEqual(batch[near.pk], out)
+        self.assertEqual(best_transfer_candidate(out), near)
+        with self.assertNumQueries(1):
+            best_transfer_candidates([out, near])

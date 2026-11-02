@@ -5,9 +5,9 @@ from django.db.models import Q, Sum
 from django.shortcuts import redirect, render
 
 from ..forms import BulkCategorizationForm, TransactionCategorizationFormSet, TransactionFilterForm
-from ..internal_transfers import best_transfer_candidate, link_transfer_pair, unlink_transfer
+from ..internal_transfers import best_transfer_candidates, link_transfer_pair, unlink_transfer
 from ..models import CategorizationRule, Transaction
-from ..rules import categorization_suggestion
+from ..rules import categorization_suggestions
 
 
 @login_required
@@ -152,12 +152,14 @@ def transaction_overview(request):
         expenses=Sum("amount", filter=Q(amount__lt=0), default=0),
         balance=Sum("amount", default=0),
     )
-    for form in formset.forms:
-        form.instance.rule_suggestion = categorization_suggestion(form.instance)
-        form.instance.transfer_suggestion = (
-            None if form.instance.transfer_counterpart_id
-            else best_transfer_candidate(form.instance)
-        )
+    instances = [form.instance for form in formset.forms]
+    rule_suggestions = categorization_suggestions(instances)
+    transfer_suggestions = best_transfer_candidates(
+        [item for item in instances if not item.transfer_counterpart_id]
+    )
+    for item in instances:
+        item.rule_suggestion = rule_suggestions.get(item.pk)
+        item.transfer_suggestion = transfer_suggestions.get(item.pk)
     return render(request, "ledger/transaction_overview.html", {
         "filters": filters,
         "formset": formset,
