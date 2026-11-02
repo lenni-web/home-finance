@@ -87,6 +87,16 @@ X_FRAME_OPTIONS = "DENY"
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 5_000
 
 CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://redis:6379/0")
+if os.environ.get("USE_SQLITE") == "1":
+    CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+else:
+    # Gemeinsamer Zähler für alle Gunicorn-Prozesse; Redis-Datenbank 1 neben der Warteschlange.
+    CACHES = {"default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": os.environ.get(
+            "CACHE_URL", CELERY_BROKER_URL.rsplit("/", 1)[0] + "/1"
+        ),
+    }}
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_SERIALIZER = "json"
 CELERY_ACCEPT_CONTENT = ["json"]
@@ -98,7 +108,22 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": 60.0,
     },
 }
-EMAIL_CREDENTIAL_KEY = os.environ.get("EMAIL_CREDENTIAL_KEY", SECRET_KEY)
+EMAIL_CREDENTIAL_KEY = os.environ.get("EMAIL_CREDENTIAL_KEY", "")
+if not EMAIL_CREDENTIAL_KEY:
+    if not DEBUG:
+        raise RuntimeError(
+            "EMAIL_CREDENTIAL_KEY muss für den Produktionsbetrieb gesetzt sein. Wurde bisher "
+            "ein IMAP-Passwort ohne eigenen Schlüssel gespeichert, ist der Wert von "
+            "DJANGO_SECRET_KEY einzutragen, damit es entschlüsselbar bleibt."
+        )
+    EMAIL_CREDENTIAL_KEY = SECRET_KEY
+
+# Pfad der Django-Verwaltungsoberfläche; ein eigener Wert erschwert automatisches Scannen.
+ADMIN_URL = os.environ.get("DJANGO_ADMIN_URL", "admin").strip("/") + "/"
+
+# Fehlversuche beim Login werden pro Benutzername und Adresse gezählt.
+LOGIN_MAX_FAILURES = int(os.environ.get("DJANGO_LOGIN_MAX_FAILURES", "5"))
+LOGIN_LOCKOUT_SECONDS = int(os.environ.get("DJANGO_LOGIN_LOCKOUT_SECONDS", "900"))
 DEPLOY_REVISION = os.environ.get("DEPLOY_REVISION", "unbekannt")
 try:
     package_version = f"v{version('ausgaben-archiv')}"

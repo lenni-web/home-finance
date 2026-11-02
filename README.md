@@ -59,6 +59,16 @@ als lokale Aufgabenwarteschlange; PostgreSQL und Dokumente liegen in eigenen Vol
 Ein zusätzlicher Celery-Beat-Dienst stößt den fälligen E-Mail-Abruf einmal pro Minute an;
 das in den Einstellungen gewählte Intervall entscheidet, ob tatsächlich abgerufen wird.
 
+### Härtung
+
+- `EMAIL_CREDENTIAL_KEY` ist im Produktionsbetrieb Pflicht; ohne ihn startet die Anwendung
+  nicht. Wurde bisher ohne eigenen Schlüssel ein IMAP-Passwort gespeichert, muss hier der
+  Wert von `DJANGO_SECRET_KEY` eingetragen werden, sonst ist es nicht mehr lesbar.
+- `DJANGO_ADMIN_URL` legt den Pfad der Verwaltungsoberfläche fest (Standard `admin`).
+- Nach `DJANGO_LOGIN_MAX_FAILURES` Fehlversuchen (Standard 5) wird die Kombination aus
+  Benutzername und Adresse für `DJANGO_LOGIN_LOCKOUT_SECONDS` (Standard 900) gesperrt.
+  Die Zähler liegen in Redis (Datenbank 1, überschreibbar mit `CACHE_URL`).
+
 ### Installation als Systemdienst
 
 Nach dem ersten erfolgreichen Start installiert das folgende Kommando den Compose-Stack
