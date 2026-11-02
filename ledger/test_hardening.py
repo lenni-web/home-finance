@@ -121,3 +121,33 @@ class AnalyticsFilterChoiceTests(TestCase):
         response = self.client.get(reverse("analytics"))
 
         self.assertEqual(len(response.context["filters"].fields["month"].choices), 1)
+
+
+class DocumentArchiveQueryTests(TestCase):
+    def test_archive_groups_in_database_without_loading_ocr_text(self):
+        from datetime import date
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from .models import Document
+
+        user = get_user_model().objects.create_user("archiv", password="secret-test-password")
+        self.client.force_login(user)
+        for index in range(4):
+            Document.objects.create(
+                kind=Document.Kind.INVOICE, original_filename=f"d{index}.pdf",
+                document_date=date(2026, 1 + index % 2, 5), extracted_text="GEHEIMER OCR TEXT " * 50,
+                file=SimpleUploadedFile(f"d{index}.pdf", f"%PDF-{index}".encode(), "application/pdf"),
+            )
+        Document.objects.create(
+            kind=Document.Kind.OTHER, original_filename="undated.pdf",
+            file=SimpleUploadedFile("undated.pdf", b"%PDF-undated", "application/pdf"),
+        )
+
+        response = self.client.get(reverse("document_archive"))
+
+        keys = [group["key"] for group in response.context["archive_groups"]]
+        self.assertEqual(keys, ["2026_02", "2026_01", "undated"])
+        for group in response.context["archive_groups"]:
+            for document in group["page"].object_list:
+                self.assertIn("extracted_text", document.get_deferred_fields())

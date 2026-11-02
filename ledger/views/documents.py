@@ -1,10 +1,12 @@
 import mimetypes
+from datetime import timedelta
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db import transaction as db_transaction
-from django.db.models import Q
+from django.db.models import Count, F, Q
+from django.db.models.functions import TruncMonth
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.clickjacking import xframe_options_sameorigin
@@ -219,7 +221,7 @@ def revoke_automatic_match(request, pk):
 def document_archive(request):
     queryset = Document.objects.select_related("category").prefetch_related(
         "tags", "people", "transactions"
-    ).order_by("-document_date", "-created_at")
+    ).defer("extracted_text").order_by("-document_date", "-created_at")
     filters = DocumentArchiveFilterForm(request.GET)
     if filters.is_valid():
         values = filters.cleaned_data
@@ -253,21 +255,28 @@ def document_archive(request):
                 | Q(original_filename__icontains=values["q"])
                 | Q(extracted_text__icontains=values["q"])
             )
-    grouped_documents = {}
-    for document in queryset.distinct():
-        month_label = (
-            document.document_date.strftime("%m/%Y") if document.document_date else "Ohne Datum"
-        )
-        month_key = (
-            document.document_date.strftime("%Y_%m") if document.document_date else "undated"
-        )
-        group = grouped_documents.setdefault(month_key, {
-            "key": month_key, "label": month_label, "documents": [],
-        })
-        group["documents"].append(document)
+    # Gruppierung und Seiteneinteilung erfolgen in der Datenbank, damit weder alle Dokumente
+    # noch deren OCR-Texte in den Speicher geladen werden.
+    month_buckets = (
+        queryset.order_by().annotate(bucket=TruncMonth("document_date"))
+        .values("bucket").annotate(total=Count("pk", distinct=True))
+        .order_by(F("bucket").desc(nulls_last=True))
+    )
     archive_groups = []
-    for group in grouped_documents.values():
-        paginator = Paginator(group["documents"], 10)
+    for bucket in month_buckets:
+        month_start = bucket["bucket"]
+        if month_start is None:
+            month_key, month_label = "undated", "Ohne Datum"
+            documents = queryset.filter(document_date__isnull=True)
+        else:
+            month_key, month_label = month_start.strftime("%Y_%m"), month_start.strftime("%m/%Y")
+            next_month = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
+            documents = queryset.filter(
+                document_date__gte=month_start, document_date__lt=next_month
+            )
+        group = {"key": month_key, "label": month_label}
+        paginator = Paginator(documents.distinct(), 10)
+        paginator.count = bucket["total"]  # bereits aggregiert, spart eine COUNT-Abfrage
         parameter = f"page_{group['key']}"
         page = paginator.get_page(request.GET.get(parameter, 1))
         pagination_links = []
