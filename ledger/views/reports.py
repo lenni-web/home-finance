@@ -11,8 +11,8 @@ from django.shortcuts import render
 from ..forms import AnalyticsFilterForm, DocumentUploadForm
 from ..models import Document, StatementImport, Transaction
 from ..periods import (
-    ZERO, financial_transactions, income_expense_totals, latest_booking_date, month_end,
-    parse_month, previous_month,
+    ZERO, booked_months, financial_transactions, income_expense_totals, latest_booking_date, month_end,
+    month_choices, parse_month, previous_month,
 )
 
 
@@ -54,6 +54,7 @@ def dashboard(request):
         "transactions": Transaction.objects.select_related("category")[:10],
         "statement_imports": StatementImport.objects.select_related("document", "account")[:5],
         "months": months,
+        "month_choices": month_choices(booked_months(month_start)),
         "upload_form": DocumentUploadForm(),
         "selected_month": month_start.strftime("%Y-%m"),
         "selected_month_date": month_start,

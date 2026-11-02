@@ -470,3 +470,35 @@ class FilterDropdownTests(TestCase):
         self.assertEqual([value for value, _ in form.fields["month"].choices], ["", "2026-02"])
         self.assertEqual(sum(group["total"] for group in response.context["archive_groups"]), 2)
         self.assertContains(response, "<select name=\"month\"")
+
+
+class DashboardMonthDropdownTests(TestCase):
+    def test_dashboard_offers_booked_months_and_keeps_deep_links(self):
+        from datetime import date
+
+        from .models import Account, Document, StatementImport, Transaction
+
+        user = get_user_model().objects.create_user("uebersicht", password="secret-test-password")
+        self.client.force_login(user)
+        document = Document.objects.create(
+            kind=Document.Kind.BANK_STATEMENT, original_filename="u.pdf",
+            file=SimpleUploadedFile("u.pdf", b"%PDF-dash", "application/pdf"),
+        )
+        statement = StatementImport.objects.create(
+            document=document, account=Account.objects.create(name="Giro")
+        )
+        for index, booking in enumerate([date(2026, 3, 9), date(2026, 5, 2)]):
+            Transaction.objects.create(
+                statement_import=statement, booking_date=booking, amount="-1.00",
+                counterparty="X", source_fingerprint=f"{index}" * 64, reviewed=True,
+            )
+
+        response = self.client.get(reverse("dashboard"))
+        self.assertEqual(
+            [value for value, _ in response.context["month_choices"]], ["2026-05", "2026-03"]
+        )
+        self.assertContains(response, '<select name="month"')
+        self.assertContains(response, '<option value="2026-05" selected>Mai 2026</option>')
+
+        linked = self.client.get(reverse("dashboard"), {"month": "2026-04"})
+        self.assertContains(linked, '<option value="2026-04" selected>April 2026</option>')

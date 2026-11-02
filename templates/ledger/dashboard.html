@@ -17,7 +17,7 @@
     .bar { height:9px; overflow:hidden; border-radius:99px; background:#e2e8f0; } .bar i { display:block; height:100%; border-radius:99px; }
     .amount { text-align:right; font-variant-numeric:tabular-nums; }
     .month-form { display:flex; align-items:end; gap:.5rem; } .month-form label { margin:0; }
-    .month-form input { width:auto; } .month-form button { padding:.68rem .8rem; border:0; border-radius:9px; background:#334155; color:white; }
+    .month-form input, .month-form select { width:auto; } .month-form button { padding:.68rem .8rem; border:0; border-radius:9px; background:#334155; color:white; }
     .task-total { display:block; margin:.35rem 0; font-size:2.1rem; font-weight:800; color:#0f766e; }
     .upload { padding:1.45rem; } .upload form p { margin:.8rem 0; }
     label { display:block; margin-bottom:.3rem; font-size:.84rem; font-weight:700; }
@@ -43,7 +43,7 @@
     @media(max-width:850px){body{padding:1rem}.top-grid,.analytics-grid{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,1fr)}.section-head{align-items:center}}
   </style>{% endblock %}{% block content %}  <header class="app-page-header"><div class="app-page-heading dashboard-brand"><h1>Finanzen im Blick</h1></div>{% include "ledger/_navigation.html" %}</header>
   {% for message in messages %}<div class="card message">{{ message }}</div>{% endfor %}
-  <div class="section-head"><div><h2>Monatsauswertung</h2><span class="muted">{{ selected_month_date|date:"F Y" }}</span></div><form class="month-form" method="get"><label>Monat<input type="month" name="month" value="{{ selected_month }}"></label><button>Anzeigen</button></form></div>
+  <div class="section-head"><div><h2>Monatsauswertung</h2><span class="muted">{{ selected_month_date|date:"F Y" }}</span></div><form class="month-form" method="get"><label>Monat<select name="month" onchange="this.form.submit()">{% for value, label in month_choices %}<option value="{{ value }}"{% if value == selected_month %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label><noscript><button>Anzeigen</button></noscript></form></div>
   <section class="metrics">
     <div class="card metric">Einnahmen<strong class="positive">{{ totals.income|money }} €</strong></div>
     <div class="card metric">Ausgaben<strong class="negative">{{ expenses_absolute|money }} €</strong></div>
