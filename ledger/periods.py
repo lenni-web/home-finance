@@ -6,6 +6,8 @@ from decimal import Decimal
 
 from django.db.models import DecimalField, Q, Sum, Value
 from django.db.models.functions import Coalesce
+from django.utils import timezone
+from django.utils.formats import date_format
 
 from .models import Transaction
 
@@ -51,3 +53,19 @@ def income_expense_totals(queryset):
         expenses=Coalesce(Sum("amount", filter=Q(amount__lt=0)), ZERO),
         balance=Coalesce(Sum("amount"), ZERO),
     )
+
+
+def booked_months(extra=None):
+    """Monatserste mit bestätigten Buchungen, neueste zuerst.
+
+    ``extra`` (Monatserster) wird ergänzt, falls dort noch keine Buchungen liegen. Ohne
+    jede Buchung steht der laufende Monat zur Auswahl.
+    """
+    months = list(Transaction.objects.filter(reviewed=True).dates("booking_date", "month", order="DESC"))
+    if extra and extra not in months:
+        months = sorted([*months, extra], reverse=True)
+    return months or [timezone.localdate().replace(day=1)]
+
+
+def month_choices(months):
+    return [(item.strftime("%Y-%m"), date_format(item, "F Y")) for item in months]

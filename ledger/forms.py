@@ -1,16 +1,17 @@
 import hashlib
 import re
 from datetime import date
+from decimal import Decimal
 
 from django import forms
 from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
 from django.forms import modelformset_factory
-from django.utils import timezone
-from django.utils.formats import date_format, number_format
+from django.utils.formats import number_format
 
+from .periods import booked_months, month_choices
 from .models import (
-    Account, CategorizationRule, Category, Document, EmailImportConfig, Person, Tag, Transaction,
+    Account, Budget, CategorizationRule, Category, Document, EmailImportConfig, Person, Tag, Transaction,
 )
 
 
@@ -312,21 +313,14 @@ class AnalyticsFilterForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        months = list(
-            Transaction.objects.filter(reviewed=True)
-            .dates("booking_date", "month", order="DESC")
-        )
         requested = self.data.get("month", "") if self.is_bound else ""
-        if re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", requested or ""):
-            # Verweise auf einen noch leeren Monat bleiben gültig.
-            requested_date = date(int(requested[:4]), int(requested[5:]), 1)
-            if requested_date not in months:
-                months = sorted([*months, requested_date], reverse=True)
-        if not months:
-            months = [timezone.localdate().replace(day=1)]
-        self.fields["month"].choices = [
-            (item.strftime("%Y-%m"), date_format(item, "F Y")) for item in months
-        ]
+        # Verweise auf einen noch leeren Monat bleiben gültig.
+        extra = (
+            date(int(requested[:4]), int(requested[5:]), 1)
+            if re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", requested or "") else None
+        )
+        months = booked_months(extra)
+        self.fields["month"].choices = month_choices(months)
         years = sorted({item.year for item in months}, reverse=True)
         requested_year = self.data.get("year", "") if self.is_bound else ""
         if str(requested_year).isdigit() and int(requested_year) not in years:
@@ -452,3 +446,20 @@ class CategorizationRuleFilterForm(forms.Form):
             ("updated", "Zuletzt geändert"),
         ],
     )
+
+
+class BudgetForm(forms.Form):
+    category = forms.ModelChoiceField(
+        queryset=Category.objects.filter(active=True), label="Kategorie"
+    )
+    monthly_amount = forms.DecimalField(
+        label="Monatsbudget in €", min_value=Decimal("0.01"), max_digits=12,
+        decimal_places=2, localize=True,
+    )
+
+    def save(self):
+        budget, _created = Budget.objects.update_or_create(
+            category=self.cleaned_data["category"],
+            defaults={"monthly_amount": self.cleaned_data["monthly_amount"]},
+        )
+        return budget

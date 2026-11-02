@@ -239,3 +239,102 @@ class BatchSuggestionTests(TestCase):
         self.assertEqual(best_transfer_candidate(out), near)
         with self.assertNumQueries(1):
             best_transfer_candidates([out, near])
+
+
+class BudgetTests(TestCase):
+    def setUp(self):
+        from datetime import date
+
+        from .models import Account, Category, Document, StatementImport, Transaction
+
+        self.user = get_user_model().objects.create_user("budget", password="secret-test-password")
+        self.client.force_login(self.user)
+        document = Document.objects.create(
+            kind=Document.Kind.BANK_STATEMENT, original_filename="bud.pdf",
+            file=SimpleUploadedFile("bud.pdf", b"%PDF-budget", "application/pdf"),
+        )
+        self.statement = StatementImport.objects.create(
+            document=document, account=Account.objects.create(name="Giro")
+        )
+        self.food = Category.objects.create(name="Essen")
+        self.fun = Category.objects.create(name="Freizeit")
+        self.Transaction = Transaction
+        self.counter = 0
+        self.day = date(2026, 6, 10)
+
+    def book(self, amount, category=None, *, reviewed=True, transfer=False, day=None):
+        self.counter += 1
+        return self.Transaction.objects.create(
+            statement_import=self.statement, booking_date=day or self.day, amount=amount,
+            category=category, reviewed=reviewed, is_internal_transfer=transfer,
+            counterparty="X", source_fingerprint=f"{self.counter:064d}",
+        )
+
+    def test_overview_counts_net_expenses_and_ignores_transfers_and_other_months(self):
+        from datetime import date
+
+        from .budgets import budget_overview
+        from .models import Budget
+
+        Budget.objects.create(category=self.food, monthly_amount="100.00")
+        Budget.objects.create(category=self.fun, monthly_amount="50.00")
+        self.book("-60.00", self.food)
+        self.book("-30.00", self.food)
+        self.book("10.00", self.food)  # Erstattung mindert die Ausgaben
+        self.book("-500.00", self.food, transfer=True)
+        self.book("-500.00", self.food, reviewed=False)
+        self.book("-500.00", self.food, day=date(2026, 5, 31))
+        self.book("-75.00", self.fun)
+        self.book("-12.00")  # ohne Kategorie, ohne Budget
+
+        overview = budget_overview(date(2026, 6, 1))
+
+        food, fun = overview["rows"]
+        self.assertEqual((food["spent"], food["remaining"], food["state"]), (80, 20, "warn"))
+        self.assertEqual((fun["spent"], fun["percent"], fun["state"]), (75, 150, "over"))
+        self.assertEqual(fun["bar_percent"], 100)
+        self.assertEqual(overview["exceeded"], 1)
+        self.assertEqual(overview["total_limit"], 150)
+        self.assertEqual([item["name"] for item in overview["unbudgeted"]], ["Ohne Kategorie"])
+
+    def test_warning_state_starts_at_eighty_percent(self):
+        from datetime import date
+
+        from .budgets import budget_overview
+        from .models import Budget
+
+        Budget.objects.create(category=self.food, monthly_amount="100.00")
+        self.book("-80.00", self.food)
+
+        self.assertEqual(budget_overview(date(2026, 6, 1))["rows"][0]["state"], "warn")
+
+    def test_page_saves_updates_and_deletes_budgets(self):
+        from .models import Budget
+
+        url = reverse("budgets")
+        response = self.client.post(url, {"category": self.food.pk, "monthly_amount": "250,50"})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(str(Budget.objects.get().monthly_amount), "250.50")
+
+        self.client.post(url, {"category": self.food.pk, "monthly_amount": "300,00"})
+        self.assertEqual(Budget.objects.count(), 1)
+        self.assertEqual(str(Budget.objects.get().monthly_amount), "300.00")
+
+        page = self.client.get(url, {"month": "2026-06"})
+        self.assertContains(page, "Essen")
+        self.assertContains(page, "Juni 2026")
+
+        budget = Budget.objects.get()
+        self.assertEqual(self.client.get(reverse("delete_budget", args=[budget.pk])).status_code, 405)
+        self.client.post(reverse("delete_budget", args=[budget.pk]), {"month": "2026-06"})
+        self.assertFalse(Budget.objects.exists())
+
+    def test_rejects_zero_and_requires_login(self):
+        response = self.client.post(
+            reverse("budgets"), {"category": self.food.pk, "monthly_amount": "0"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "errorlist")
+
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse("budgets")).status_code, 302)

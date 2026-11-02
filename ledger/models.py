@@ -1,4 +1,5 @@
 import hashlib
+from decimal import Decimal
 from pathlib import Path
 
 from django.core.validators import MinValueValidator
@@ -57,6 +58,21 @@ class Category(TimestampedModel):
 
     def __str__(self):
         return self.name
+
+
+class Budget(TimestampedModel):
+    """Monatliches Ausgabenlimit einer Kategorie."""
+
+    category = models.OneToOneField(Category, on_delete=models.CASCADE, related_name="budget")
+    monthly_amount = models.DecimalField(
+        max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal("0.01"))]
+    )
+
+    class Meta:
+        ordering = ["category__name"]
+
+    def __str__(self):
+        return f"{self.category}: {self.monthly_amount} €/Monat"
 
 
 class Tag(TimestampedModel):

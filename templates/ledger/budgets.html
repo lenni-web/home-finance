@@ -1,0 +1,28 @@
+{% extends "ledger/base.html" %}{% load ledger_format %}{% block title %}Budgets · Ausgabenarchiv{% endblock %}{% block page_style %}<style>
+  :root{font-family:Inter,ui-sans-serif,system-ui,sans-serif;color:#172033;background:#f1f5f9}*{box-sizing:border-box}body{max-width:1100px;margin:auto;padding:1.5rem}
+  header{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem}.card{background:white;border:1px solid #dbe3ec;border-radius:16px;padding:1.2rem;margin:1rem 0;box-shadow:0 5px 20px rgba(15,23,42,.04)}
+  .toolbar{display:flex;gap:1rem;align-items:end;flex-wrap:wrap}.toolbar p{margin:0}label{display:block;font-weight:700;margin-bottom:.3rem}select,input{padding:.65rem;border:1px solid #cbd5e1;border-radius:9px;font:inherit}
+  button{border:0;border-radius:9px;padding:.7rem 1rem;background:#0f766e;color:white;font-weight:700;cursor:pointer}button.link{background:none;color:#b91c1c;padding:.2rem .4rem}
+  .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}.summary strong{display:block;font-size:1.5rem;margin-top:.3rem}.negative{color:#b91c1c}.hint{color:#64748b;font-size:.86rem}
+  table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:.7rem .5rem;border-bottom:1px solid #e2e8f0;vertical-align:middle}td.num,th.num{text-align:right;white-space:nowrap}
+  .bar{height:10px;border-radius:999px;background:#e2e8f0;overflow:hidden;min-width:120px}.bar i{display:block;height:100%;background:#0f766e}.bar.warn i{background:#d97706}.bar.over i{background:#b91c1c}
+  .state-over{color:#b91c1c;font-weight:700}.state-warn{color:#b45309;font-weight:700}.swatch{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:.4rem}
+  .errorlist{color:#b91c1c;margin:.3rem 0}.messages{list-style:none;padding:0}.table-wrap{overflow:auto}
+  @media(max-width:700px){header{display:block}.summary{grid-template-columns:1fr}}
+</style>{% endblock %}{% block content %}
+<header class="app-page-header"><div class="app-page-heading"><h1>Budgets</h1><p>Monatslimits je Kategorie im Vergleich zu den Ausgaben von {{ month_date|date:"F Y" }}.</p></div>{% include "ledger/_navigation.html" %}</header>
+{% for message in messages %}<div class="card">{{ message }}</div>{% endfor %}
+<section class="card"><form method="get" class="toolbar"><p><label for="id_month">Monat</label><select name="month" id="id_month" onchange="this.form.submit()">{% for value, label in month_choices %}<option value="{{ value }}"{% if value == selected_month %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></p><noscript><button>Anzeigen</button></noscript></form></section>
+<section class="summary">
+  <div class="card">Gesamtbudget<strong>{{ overview.total_limit|money }} €</strong></div>
+  <div class="card">Davon ausgegeben<strong{% if overview.total_spent > overview.total_limit %} class="negative"{% endif %}>{{ overview.total_spent|money }} €</strong></div>
+  <div class="card">Überschrittene Budgets<strong{% if overview.exceeded %} class="negative"{% endif %}>{{ overview.exceeded }}</strong></div>
+</section>
+<section class="card table-wrap"><h2>Budgets im Monat</h2>
+{% if overview.rows %}<table><thead><tr><th>Kategorie</th><th class="num">Budget</th><th class="num">Ausgegeben</th><th class="num">Übrig</th><th>Auslastung</th><th></th></tr></thead><tbody>
+{% for row in overview.rows %}<tr><td><span class="swatch" style="background:{{ row.category.color }}"></span>{{ row.category.name }}</td><td class="num">{{ row.limit|money }} €</td><td class="num">{{ row.spent|money }} €</td><td class="num{% if row.state == 'over' %} state-over{% endif %}">{{ row.remaining|money }} €</td><td><div class="bar {{ row.state }}" role="progressbar" aria-valuenow="{{ row.percent }}" aria-valuemin="0" aria-valuemax="100" aria-label="{{ row.category.name }}: {{ row.percent }} Prozent des Budgets"><i style="width:{{ row.bar_percent }}%"></i></div><span class="hint state-{{ row.state }}">{{ row.percent }} %{% if row.state == 'over' %} · überschritten{% elif row.state == 'warn' %} · fast aufgebraucht{% endif %}</span></td><td><form method="post" action="{% url 'delete_budget' row.budget.pk %}">{% csrf_token %}<input type="hidden" name="month" value="{{ selected_month }}"><button class="link" aria-label="Budget für {{ row.category.name }} entfernen">Entfernen</button></form></td></tr>{% endfor %}
+</tbody></table>{% else %}<p class="hint">Noch keine Budgets angelegt.</p>{% endif %}
+<p class="hint">Erstattungen mindern die Ausgaben einer Kategorie. Interne Umbuchungen und unbestätigte Buchungen zählen nicht.</p></section>
+<section class="card"><h2>Budget festlegen oder ändern</h2><form method="post" class="toolbar">{% csrf_token %}{{ form.non_field_errors }}<p>{{ form.category.label_tag }}{{ form.category }}{{ form.category.errors }}</p><p>{{ form.monthly_amount.label_tag }}{{ form.monthly_amount }}{{ form.monthly_amount.errors }}</p><p><button>Speichern</button></p></form><p class="hint">Eine bereits vorhandene Kategorie wird überschrieben. Es gibt ein Budget pro Kategorie und Monat; es gilt für alle Monate.</p></section>
+{% if overview.unbudgeted %}<section class="card table-wrap"><h2>Ausgaben ohne Budget</h2><table><thead><tr><th>Kategorie</th><th class="num">Ausgegeben</th></tr></thead><tbody>{% for item in overview.unbudgeted %}<tr><td>{{ item.name }}</td><td class="num">{{ item.spent|money }} €</td></tr>{% endfor %}</tbody></table></section>{% endif %}
+{% endblock %}

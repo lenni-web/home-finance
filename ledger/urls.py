@@ -24,6 +24,8 @@ urlpatterns = [
     ),
     path("statements/<int:pk>/review/", views.statement_review, name="statement_review"),
     path("transactions/", views.transaction_overview, name="transaction_overview"),
+    path("budgets/", views.budgets, name="budgets"),
+    path("budgets/<int:pk>/delete/", views.delete_budget, name="delete_budget"),
     path("tasks/", views.open_tasks, name="open_tasks"),
     path("settings/classification/", views.manage_classification, name="manage_classification"),
     path(
