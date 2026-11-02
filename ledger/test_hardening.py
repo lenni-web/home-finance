@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
@@ -72,3 +73,51 @@ class SettingsHardeningTests(TestCase):
         module = self.load_settings(DJANGO_DEBUG="1")
         self.assertEqual(module.EMAIL_CREDENTIAL_KEY, module.SECRET_KEY)
         self.assertEqual(module.ADMIN_URL, "admin/")
+
+
+class AnalyticsFilterChoiceTests(TestCase):
+    def setUp(self):
+        from datetime import date
+
+        from .models import Account, Document, StatementImport, Transaction
+
+        self.user = get_user_model().objects.create_user("auswerter", password="secret-test-password")
+        self.client.force_login(self.user)
+        document = Document.objects.create(
+            kind=Document.Kind.BANK_STATEMENT, original_filename="a.pdf",
+            file=SimpleUploadedFile("a.pdf", b"%PDF-choices", "application/pdf"),
+        )
+        statement = StatementImport.objects.create(
+            document=document, account=Account.objects.create(name="Giro")
+        )
+        for index, booking in enumerate([date(2025, 12, 3), date(2026, 3, 9), date(2026, 3, 20)]):
+            Transaction.objects.create(
+                statement_import=statement, booking_date=booking, amount="-1.00",
+                counterparty="X", source_fingerprint=f"{index}" * 64, reviewed=True,
+            )
+        Transaction.objects.create(
+            statement_import=statement, booking_date=date(2026, 5, 1), amount="-1.00",
+            counterparty="Ungeprüft", source_fingerprint="9" * 64, reviewed=False,
+        )
+
+    def test_dropdowns_list_only_existing_months_and_years_newest_first(self):
+        response = self.client.get(reverse("analytics"))
+
+        form = response.context["filters"]
+        self.assertEqual([value for value, _ in form.fields["month"].choices], ["2026-03", "2025-12"])
+        self.assertEqual([value for value, _ in form.fields["year"].choices], ["2026", "2025"])
+        self.assertContains(response, "<select name=\"month\"")
+        self.assertContains(response, "März 2026")
+
+    def test_year_selection_is_used(self):
+        response = self.client.get(reverse("analytics"), {"period": "year", "year": "2025"})
+
+        self.assertContains(response, "Jahresüberblick 2025")
+
+    def test_empty_database_still_offers_current_month(self):
+        from .models import Transaction
+
+        Transaction.objects.all().delete()
+        response = self.client.get(reverse("analytics"))
+
+        self.assertEqual(len(response.context["filters"].fields["month"].choices), 1)

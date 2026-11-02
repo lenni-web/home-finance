@@ -1,10 +1,13 @@
 import hashlib
+import re
+from datetime import date
 
 from django import forms
 from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
 from django.forms import modelformset_factory
-from django.utils.formats import number_format
+from django.utils import timezone
+from django.utils.formats import date_format, number_format
 
 from .models import (
     Account, CategorizationRule, Category, Document, EmailImportConfig, Person, Tag, Transaction,
@@ -301,19 +304,34 @@ class AnalyticsFilterForm(forms.Form):
         choices=[("month", "Monat"), ("year", "Jahr")],
         initial="month",
     )
-    month = forms.CharField(
-        required=False, label="Monat", widget=forms.TextInput(attrs={"type": "month"})
-    )
-    year = forms.IntegerField(
-        required=False,
-        label="Jahr",
-        min_value=2000,
-        max_value=2100,
-        widget=forms.NumberInput(attrs={"step": 1}),
-    )
+    month = forms.ChoiceField(required=False, label="Monat", choices=[])
+    year = forms.TypedChoiceField(required=False, label="Jahr", choices=[], coerce=int)
     account = forms.ModelChoiceField(
         queryset=Account.objects.all(), required=False, label="Konto", empty_label="Alle Konten"
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        months = list(
+            Transaction.objects.filter(reviewed=True)
+            .dates("booking_date", "month", order="DESC")
+        )
+        requested = self.data.get("month", "") if self.is_bound else ""
+        if re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", requested or ""):
+            # Verweise auf einen noch leeren Monat bleiben gültig.
+            requested_date = date(int(requested[:4]), int(requested[5:]), 1)
+            if requested_date not in months:
+                months = sorted([*months, requested_date], reverse=True)
+        if not months:
+            months = [timezone.localdate().replace(day=1)]
+        self.fields["month"].choices = [
+            (item.strftime("%Y-%m"), date_format(item, "F Y")) for item in months
+        ]
+        years = sorted({item.year for item in months}, reverse=True)
+        requested_year = self.data.get("year", "") if self.is_bound else ""
+        if str(requested_year).isdigit() and int(requested_year) not in years:
+            years = sorted([*years, int(requested_year)], reverse=True)
+        self.fields["year"].choices = [(str(year), str(year)) for year in years]
 
 
 class TransactionCategorizationForm(forms.ModelForm):
