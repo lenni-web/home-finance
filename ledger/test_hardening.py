@@ -412,3 +412,61 @@ class CSVUploadTests(TestCase):
         )
         self.assertContains(response, "Binärdaten")
         self.assertFalse(Document.objects.exists())
+
+
+class FilterDropdownTests(TestCase):
+    def setUp(self):
+        from datetime import date
+
+        from .models import Account, Document, StatementImport, Transaction
+
+        self.user = get_user_model().objects.create_user("filter", password="secret-test-password")
+        self.client.force_login(self.user)
+        statement_document = Document.objects.create(
+            kind=Document.Kind.BANK_STATEMENT, original_filename="f.pdf",
+            file=SimpleUploadedFile("f.pdf", b"%PDF-filter", "application/pdf"),
+        )
+        statement = StatementImport.objects.create(
+            document=statement_document, account=Account.objects.create(name="Giro")
+        )
+        for index, booking in enumerate([date(2025, 12, 3), date(2026, 3, 9)]):
+            Transaction.objects.create(
+                statement_import=statement, booking_date=booking, amount="-1.00",
+                counterparty=f"Händler{index}", source_fingerprint=f"{index}" * 64, reviewed=True,
+            )
+        Transaction.objects.create(
+            statement_import=statement, booking_date=date(2026, 8, 1), amount="-1.00",
+            counterparty="Ungeprüft", source_fingerprint="9" * 64, reviewed=False,
+        )
+        for name, when in [("a.pdf", date(2026, 2, 5)), ("b.pdf", date(2026, 2, 20)), ("c.pdf", None)]:
+            Document.objects.create(
+                kind=Document.Kind.INVOICE, original_filename=name, document_date=when,
+                file=SimpleUploadedFile(name, name.encode() + b"%PDF", "application/pdf"),
+            )
+
+    def test_transaction_filter_offers_booked_months_and_years_with_blank_entry(self):
+        form = self.client.get(reverse("transaction_overview")).context["filters"]
+
+        self.assertEqual(
+            [value for value, _ in form.fields["month"].choices], ["", "2026-03", "2025-12"]
+        )
+        self.assertEqual([value for value, _ in form.fields["year"].choices], ["", "2026", "2025"])
+
+    def test_transaction_filters_still_work_with_dropdown_values(self):
+        by_month = self.client.get(reverse("transaction_overview"), {"month": "2025-12"})
+        by_year = self.client.get(reverse("transaction_overview"), {"year": "2026"})
+        empty_month = self.client.get(reverse("transaction_overview"), {"month": "2026-05"})
+
+        self.assertEqual(by_month.context["transaction_count"], 1)
+        self.assertContains(by_month, "Händler0")
+        self.assertEqual(by_year.context["transaction_count"], 1)
+        self.assertEqual(empty_month.context["transaction_count"], 0)  # gültiger, leerer Monat
+        self.assertContains(by_year, "<select name=\"month\"")
+
+    def test_document_archive_filter_lists_document_months_only(self):
+        response = self.client.get(reverse("document_archive"), {"month": "2026-02"})
+
+        form = response.context["filters"]
+        self.assertEqual([value for value, _ in form.fields["month"].choices], ["", "2026-02"])
+        self.assertEqual(sum(group["total"] for group in response.context["archive_groups"]), 2)
+        self.assertContains(response, "<select name=\"month\"")

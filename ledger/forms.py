@@ -20,6 +20,43 @@ def tag_checkbox_widget():
     return forms.CheckboxSelectMultiple(attrs={"class": "tag-toggle-list"})
 
 
+def requested_month(data):
+    """Gewünschter Monat (``YYYY-MM``) aus den Formulardaten als Monatserster, sonst ``None``."""
+    value = data.get("month", "") or ""
+    if re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", value):
+        return date(int(value[:4]), int(value[5:]), 1)
+    return None
+
+
+def requested_year(data):
+    value = str(data.get("year", "") or "")
+    return int(value) if value.isdigit() else None
+
+
+def set_period_choices(form, months, *, blank_labels=None):
+    """Füllt ``month``/``year`` mit den vorhandenen Zeiträumen (neueste zuerst).
+
+    Verweise auf einen noch leeren Monat oder ein leeres Jahr bleiben gültig. Mit
+    ``blank_labels=(Monat, Jahr)`` gibt es zusätzlich einen Eintrag ohne Filter.
+    """
+    months = list(months)
+    extra_month = requested_month(form.data) if form.is_bound else None
+    if extra_month and extra_month not in months:
+        months = sorted([*months, extra_month], reverse=True)
+    years = {item.year for item in months}
+    extra_year = requested_year(form.data) if form.is_bound else None
+    if extra_year:
+        years.add(extra_year)
+    month_options = month_choices(months)
+    year_options = [(str(year), str(year)) for year in sorted(years, reverse=True)]
+    if blank_labels:
+        month_options.insert(0, ("", blank_labels[0]))
+        year_options.insert(0, ("", blank_labels[1]))
+    form.fields["month"].choices = month_options
+    if "year" in form.fields:
+        form.fields["year"].choices = year_options
+
+
 class AccountForm(forms.ModelForm):
     class Meta:
         model = Account
@@ -257,7 +294,7 @@ class DocumentArchiveFilterForm(forms.Form):
     date_to = forms.DateField(
         required=False, label="Bis", widget=forms.DateInput(attrs={"type": "date"})
     )
-    month = forms.CharField(required=False, widget=forms.TextInput(attrs={"type": "month"}))
+    month = forms.ChoiceField(required=False, label="Monat", choices=[])
     kind = forms.ChoiceField(
         required=False, choices=[("", "Alle Dokumenttypen"), *Document.Kind.choices]
     )
@@ -277,6 +314,14 @@ class DocumentArchiveFilterForm(forms.Form):
         required=False, label="Suche",
         widget=forms.TextInput(attrs={"placeholder": "Händler, Rechnungsnummer oder Datei"}),
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        set_period_choices(
+            self,
+            Document.objects.exclude(document_date=None).dates("document_date", "month", order="DESC"),
+            blank_labels=("Alle Monate", ""),
+        )
 
 
 class TransactionReviewForm(forms.ModelForm):
@@ -301,8 +346,10 @@ TransactionReviewFormSet = modelformset_factory(
 
 
 class TransactionFilterForm(forms.Form):
-    month = forms.CharField(required=False, widget=forms.TextInput(attrs={"type": "month"}))
-    year = forms.IntegerField(required=False, label="Jahr", min_value=2000, max_value=2100)
+    month = forms.ChoiceField(required=False, label="Monat", choices=[])
+    year = forms.TypedChoiceField(
+        required=False, label="Jahr (ohne Monat)", choices=[], coerce=int, empty_value=None
+    )
     account = forms.ModelChoiceField(
         queryset=Account.objects.all(), required=False, empty_label="Alle Konten"
     )
@@ -320,6 +367,13 @@ class TransactionFilterForm(forms.Form):
         label="Umbuchungen",
         choices=[("", "Alle Buchungen"), ("internal", "Nur Umbuchungen"), ("open", "Ohne Gegenbuchung")],
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        set_period_choices(
+            self, Transaction.objects.filter(reviewed=True).dates("booking_date", "month", order="DESC"),
+            blank_labels=("Alle Monate", "Alle Jahre"),
+        )
 
 
 class AnalyticsFilterForm(forms.Form):
