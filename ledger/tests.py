@@ -204,7 +204,7 @@ class StatementWorkflowTests(TestCase):
             fields_per_transaction * expected_large_statement,
         )
 
-    @patch("ledger.views.process_statement_task.delay")
+    @patch("ledger.views.documents.process_statement_task.delay")
     def test_statement_upload_queues_background_task(self, delay):
         with tempfile.TemporaryDirectory() as media_root:
             with override_settings(MEDIA_ROOT=Path(media_root)):
@@ -1260,7 +1260,7 @@ Total 12,00 EUR
         self.assertEqual(merchant, "ALDI")
         self.assertEqual(confidence, 90)
 
-    @patch("ledger.views.process_document_task.delay")
+    @patch("ledger.views.documents.process_document_task.delay")
     def test_retry_clears_incorrect_extracted_fields_before_reanalysis(self, delay):
         document = Document.objects.create(
             kind=Document.Kind.INVOICE,
@@ -1285,7 +1285,7 @@ Total 12,00 EUR
         self.assertEqual(document.extraction_confidence, {})
         delay.assert_called_once_with(document.pk)
 
-    @patch("ledger.views.process_document_task.delay")
+    @patch("ledger.views.documents.process_document_task.delay")
     def test_retry_clears_automatically_generated_title_with_wrong_merchant(self, delay):
         document = Document.objects.create(
             kind=Document.Kind.INVOICE,
@@ -1303,7 +1303,7 @@ Total 12,00 EUR
         self.assertEqual(document.merchant, "")
         delay.assert_called_once_with(document.pk)
 
-    @patch("ledger.views.process_statement_task.delay")
+    @patch("ledger.views.documents.process_statement_task.delay")
     def test_failed_bank_statement_can_be_retried(self, delay):
         account = Account.objects.create(name="Fehlerkonto")
         document = Document.objects.create(
@@ -1407,7 +1407,7 @@ Total 12,00 EUR
             reviewed=True,
         )
 
-        with patch("ledger.views.scored_document_transaction_candidates") as scored:
+        with patch("ledger.views.documents.scored_document_transaction_candidates") as scored:
             response = self.client.get(reverse("document_review", args=[document.pk]))
 
         scored.assert_not_called()
@@ -1419,7 +1419,7 @@ Total 12,00 EUR
         self.assertNotContains(response, "Erkannten Text anzeigen")
         self.assertNotContains(response, "Passende Kontobewegungen")
 
-    @patch("ledger.views.process_document_task.delay")
+    @patch("ledger.views.documents.process_document_task.delay")
     def test_receipt_upload_queues_background_task(self, delay):
         with tempfile.TemporaryDirectory() as media_root:
             with override_settings(MEDIA_ROOT=Path(media_root)):
@@ -1776,7 +1776,7 @@ class EmailImportTests(TestCase):
         self.assertEqual(EmailImportMessage.objects.get().mailbox_uid, "42")
         delay.assert_called_once_with(document.pk)
 
-    @patch("ledger.views.poll_email_import_task.delay")
+    @patch("ledger.views.configuration.poll_email_import_task.delay")
     def test_settings_save_password_and_queue_manual_fetch(self, delay):
         response = self.client.post(reverse("save_email_settings"), {
             "email-enabled": "on", "email-host": "imap.example.test",
