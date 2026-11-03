@@ -7,6 +7,7 @@ from django.shortcuts import redirect, render
 from ..forms import BulkCategorizationForm, TransactionCategorizationFormSet, TransactionFilterForm
 from ..internal_transfers import best_transfer_candidates, link_transfer_pair, unlink_transfer
 from ..models import CategorizationRule, Transaction
+from ..presentation import base_context
 from ..rules import categorization_suggestions
 
 
@@ -200,6 +201,7 @@ def transaction_overview(request):
             category__isnull=True, is_internal_transfer=False
         ).count(),
         "transfer_count": queryset.filter(is_internal_transfer=True).count(),
+        **base_context(totals["income"], totals["expenses"]),
     })
 
 

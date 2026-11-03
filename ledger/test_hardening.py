@@ -1,5 +1,6 @@
 import importlib
 import os
+import re
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -502,3 +503,134 @@ class DashboardMonthDropdownTests(TestCase):
 
         linked = self.client.get(reverse("dashboard"), {"month": "2026-04"})
         self.assertContains(linked, '<option value="2026-04" selected>April 2026</option>')
+
+
+class PresentationModeTests(TestCase):
+    def setUp(self):
+        from datetime import date
+
+        from .models import Account, AppSettings, Budget, Category, Document, StatementImport, Transaction
+
+        self.AppSettings = AppSettings
+        self.user = get_user_model().objects.create_user("praesi", password="secret-test-password")
+        self.client.force_login(self.user)
+        self.document = Document.objects.create(
+            kind=Document.Kind.BANK_STATEMENT, original_filename="p.pdf",
+            file=SimpleUploadedFile("p.pdf", b"%PDF-praesi", "application/pdf"),
+        )
+        self.statement = StatementImport.objects.create(
+            document=self.document, account=Account.objects.create(name="Giro"),
+            status=StatementImport.Status.REVIEW, opening_balance="1111.11",
+        )
+        self.food = Category.objects.create(name="Essen")
+        for index, (amount, category) in enumerate([("2345.67", None), ("-586.42", self.food)]):
+            Transaction.objects.create(
+                statement_import=self.statement, booking_date=date(2026, 6, 5), amount=amount,
+                counterparty="Gegenstelle", category=category, reviewed=True,
+                source_fingerprint=f"{index}" * 64,
+            )
+        Budget.objects.create(category=self.food, monthly_amount="777.77")
+        self.invoice = Document.objects.create(
+            kind=Document.Kind.INVOICE, original_filename="r.pdf", total_amount="999.99",
+            file=SimpleUploadedFile("r.pdf", b"%PDF-rechnung", "application/pdf"),
+        )
+
+    def enable(self):
+        settings_row = self.AppSettings.current()
+        settings_row.presentation_mode = True
+        settings_row.save()
+
+    AMOUNTS = ("2.345,67", "586,42", "1.759,25", "777,77", "1111,11", "1.111,11", "999,99")
+
+    def test_normal_mode_shows_euro_amounts(self):
+        page = self.client.get(reverse("dashboard"), {"month": "2026-06"})
+
+        self.assertContains(page, "2.345,67 €")
+        self.assertNotContains(page, "Präsentationsmodus aktiv")
+
+    def test_no_real_amounts_appear_in_any_overview_when_enabled(self):
+        self.enable()
+        urls = [
+            reverse("dashboard") + "?month=2026-06",
+            reverse("analytics") + "?month=2026-06",
+            reverse("analytics") + "?period=year&year=2026",
+            reverse("transaction_overview"),
+            reverse("budgets") + "?month=2026-06",
+            reverse("document_archive"),
+            reverse("open_tasks"),
+            reverse("automatic_matches"),
+            reverse("manage_classification"),
+            reverse("settings"),
+        ]
+        for url in urls:
+            html = self.client.get(url).content.decode()
+            self.assertIn("Präsentationsmodus aktiv", html, url)
+            for amount in self.AMOUNTS:
+                self.assertNotIn(amount, html, f"{amount} sichtbar auf {url}")
+            self.assertIsNone(re.search(r"\d ?€", html), f"Euro-Betrag auf {url}")
+
+    def test_percentages_use_income_as_base_and_expenses_as_fallback(self):
+        self.enable()
+        dashboard = self.client.get(reverse("dashboard"), {"month": "2026-06"})
+        self.assertContains(dashboard, "100,0 %")  # Einnahmen = Bezugsgröße
+        self.assertContains(dashboard, "25,0 %")  # 586,42 von 2.345,67
+        self.assertContains(dashboard, "Einnahmen des Zeitraums")
+
+        from .models import Transaction
+
+        Transaction.objects.filter(amount__gt=0).delete()
+        fallback = self.client.get(reverse("transaction_overview"))
+        self.assertContains(fallback, "-100,0 %")
+        self.assertContains(fallback, "Ausgaben des Zeitraums")
+
+        empty_month = self.client.get(reverse("dashboard"), {"month": "2020-01"})
+        self.assertContains(empty_month, "•••")
+
+    def test_budgets_are_shown_relative_to_the_budget(self):
+        self.enable()
+        page = self.client.get(reverse("budgets"), {"month": "2026-06"})
+
+        self.assertContains(page, "100,0 %")  # Budget
+        self.assertContains(page, "75,4 %")  # 586,42 von 777,77 ausgegeben
+
+    def test_original_documents_and_review_pages_are_blocked_then_released(self):
+        self.enable()
+        download = reverse("document_download", args=[self.invoice.pk])
+        review = reverse("document_review", args=[self.invoice.pk])
+        statement_review = reverse("statement_review", args=[self.statement.pk])
+
+        self.assertEqual(self.client.get(download).status_code, 403)
+        self.assertRedirects(self.client.get(review), reverse("dashboard"))
+        self.assertRedirects(self.client.get(statement_review), reverse("dashboard"))
+
+        settings_row = self.AppSettings.current()
+        settings_row.presentation_mode = False
+        settings_row.save()
+        self.assertEqual(self.client.get(download).status_code, 200)
+        self.assertEqual(self.client.get(review).status_code, 200)
+        self.assertEqual(self.client.get(statement_review).status_code, 200)
+
+    def test_toggle_flips_mode_and_returns_to_a_local_page_only(self):
+        url = reverse("toggle_presentation_mode")
+
+        response = self.client.post(url, {"next": reverse("analytics")})
+        self.assertRedirects(response, reverse("analytics"), fetch_redirect_response=False)
+        self.assertTrue(self.AppSettings.current().presentation_mode)
+
+        response = self.client.post(url, {"next": "https://evil.example/steal"})
+        self.assertRedirects(response, reverse("settings"), fetch_redirect_response=False)
+        self.assertFalse(self.AppSettings.current().presentation_mode)
+
+        self.assertEqual(self.client.get(url).status_code, 405)
+        self.client.logout()
+        self.assertEqual(self.client.post(url).status_code, 302)
+        self.assertFalse(self.AppSettings.current().presentation_mode)
+
+    def test_settings_page_offers_the_switch_and_menu_has_a_quick_button(self):
+        page = self.client.get(reverse("settings"))
+        self.assertContains(page, "Präsentationsmodus einschalten")
+        self.assertContains(page, reverse("toggle_presentation_mode"))
+
+        self.enable()
+        page = self.client.get(reverse("settings"))
+        self.assertContains(page, "Präsentationsmodus ausschalten")

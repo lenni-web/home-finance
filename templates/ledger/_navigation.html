@@ -15,6 +15,7 @@
         <a href="{% url 'operational_status' %}">Betriebsstatus</a>
       </div>
     </details>
+    <form class="logout" method="post" action="{% url 'toggle_presentation_mode' %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button title="Beträge als Prozentwerte anzeigen" aria-pressed="{% if presentation_mode %}true{% else %}false{% endif %}">Präsentation{% if presentation_mode %}: an{% endif %}</button></form>
     <form class="logout" method="post" action="{% url 'logout' %}">{% csrf_token %}<button>Abmelden</button></form>
   </div>
   <details class="mobile-nav">
@@ -23,6 +24,7 @@
       <a href="{% url 'dashboard' %}">Übersicht</a><a href="{% url 'transaction_overview' %}">Buchungen</a><a href="{% url 'document_archive' %}">Dokumente</a><a href="{% url 'analytics' %}">Auswertungen</a><a href="{% url 'budgets' %}">Budgets</a>
       <span class="mobile-nav-label">Verwaltung</span>
       <a href="{% url 'open_tasks' %}">Offene Aufgaben{% if navigation_task_count %}<span class="nav-count">{{ navigation_task_count }}</span>{% endif %}</a><a href="{% url 'automatic_matches' %}">Automatische Zuordnungen</a><a href="{% url 'manage_classification' %}">Kategorien & Regeln</a><a href="{% url 'settings' %}">Einstellungen</a><a href="{% url 'operational_status' %}">Betriebsstatus</a>
+      <form method="post" action="{% url 'toggle_presentation_mode' %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button>Präsentation{% if presentation_mode %}: an{% endif %}</button></form>
       <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button>Abmelden</button></form>
     </div>
   </details>

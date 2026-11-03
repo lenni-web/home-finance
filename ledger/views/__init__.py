@@ -4,7 +4,9 @@ from .budgets import budgets, delete_budget
 from .classification import (
     delete_rule, edit_classification, edit_rule, manage_classification, toggle_classification,
 )
-from .configuration import add_account, edit_account, save_email_settings, settings
+from .configuration import (
+    add_account, edit_account, save_email_settings, settings, toggle_presentation_mode,
+)
 from .documents import (
     automatic_matches, delete_failed_document, document_archive, document_download,
     document_review, retry_failed_document, revoke_automatic_match, upload_document,
@@ -21,5 +23,5 @@ __all__ = [
     "edit_classification", "edit_rule", "health", "manage_classification", "open_tasks",
     "operational_status", "retry_failed_document", "revoke_automatic_match",
     "save_email_settings", "settings", "statement_review", "toggle_classification",
-    "transaction_overview", "upload_document",
+    "toggle_presentation_mode", "transaction_overview", "upload_document",
 ]

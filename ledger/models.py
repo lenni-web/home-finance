@@ -46,6 +46,20 @@ def import_format_choices():
     return parser_choices()
 
 
+class AppSettings(models.Model):
+    """Anwendungsweite Einstellungen (genau eine Zeile)."""
+
+    presentation_mode = models.BooleanField(
+        default=False,
+        verbose_name="Präsentationsmodus",
+        help_text="Blendet Euro-Beträge aus und zeigt Prozentwerte.",
+    )
+
+    @classmethod
+    def current(cls):
+        return cls.objects.get_or_create(pk=1)[0]
+
+
 class Account(TimestampedModel):
     name = models.CharField(max_length=120)
     iban_last_four = models.CharField(max_length=4, blank=True)

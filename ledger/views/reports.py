@@ -10,6 +10,7 @@ from django.shortcuts import render
 
 from ..forms import AnalyticsFilterForm, DocumentUploadForm
 from ..models import Document, StatementImport, Transaction
+from ..presentation import base_context
 from ..periods import (
     ZERO, booked_months, financial_transactions, income_expense_totals, latest_booking_date, month_end,
     month_choices, parse_month, previous_month,
@@ -65,6 +66,7 @@ def dashboard(request):
         "uncategorized_count": current.filter(category__isnull=True).count(),
         "task_counts": task_counts,
         "open_task_total": sum(task_counts.values()),
+        **base_context(totals["income"], totals["expenses"]),
     })
 
 
@@ -215,6 +217,7 @@ def analytics(request):
         "transaction_count": len(transactions), "monthly_rows": monthly_rows,
         "category_items": category_items, "category_gradient": category_gradient,
         "person_items": person_items, "person_gradient": person_gradient,
+        **base_context(totals["income"], totals["expenses"]),
     })
 
 

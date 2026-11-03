@@ -5,7 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Ausgabenarchiv{% endblock %}</title>
   <link rel="stylesheet" href="{% static 'ledger/app.css' %}">
+  <style>
+    .presentation-banner{display:flex;flex-wrap:wrap;gap:.6rem 1rem;align-items:center;justify-content:space-between;margin:0 0 1rem;padding:.6rem 1rem;border-radius:10px;background:#fef3c7;color:#78350f;font:600 .9rem system-ui,sans-serif}
+    .presentation-banner form{margin:0}.presentation-banner button{border:0;border-radius:8px;padding:.4rem .8rem;background:#78350f;color:#fff;font:inherit;cursor:pointer}
+  </style>
   {% block page_style %}{% endblock %}
 </head>
-<body>{% block content %}{% endblock %}</body>
+<body>{% if presentation_mode %}<div class="presentation-banner" role="status"><span>Präsentationsmodus aktiv: Beträge sind ausgeblendet{% if presentation_base_label %} · Prozentwerte beziehen sich auf die {{ presentation_base_label }} des Zeitraums (= 100 %){% else %} · Prozentwerte, wo eine Bezugsgröße vorhanden ist{% endif %}.</span><form method="post" action="{% url 'toggle_presentation_mode' %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button>Beenden</button></form></div>{% endif %}{% block content %}{% endblock %}</body>
 </html>

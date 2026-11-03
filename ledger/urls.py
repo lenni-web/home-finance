@@ -7,6 +7,7 @@ urlpatterns = [
     path("analytics/", views.analytics, name="analytics"),
     path("settings/", views.settings, name="settings"),
     path("settings/status/", views.operational_status, name="operational_status"),
+    path("presentation/toggle/", views.toggle_presentation_mode, name="toggle_presentation_mode"),
     path("settings/email/", views.save_email_settings, name="save_email_settings"),
     path("settings/accounts/add/", views.add_account, name="add_account"),
     path("settings/accounts/<int:pk>/edit/", views.edit_account, name="edit_account"),

@@ -21,6 +21,7 @@ from ..forms import (
 )
 from ..importers import get_parser
 from ..models import Document, StatementImport
+from ..presentation import hidden_in_presentation
 from ..tasks import process_document_task, process_statement_task
 
 
@@ -54,6 +55,7 @@ def upload_document(request):
 
 
 @login_required
+@hidden_in_presentation()
 def document_review(request, pk):
     document = get_object_or_404(
         Document.objects.select_related("category").prefetch_related("tags", "people", "transactions"),
@@ -320,6 +322,7 @@ def document_archive(request):
 
 
 @login_required
+@hidden_in_presentation(download=True)
 @xframe_options_sameorigin
 def document_download(request, pk):
     document = get_object_or_404(Document, pk=pk)

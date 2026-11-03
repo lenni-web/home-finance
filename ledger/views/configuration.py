@@ -2,9 +2,11 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.http import require_POST
 
 from ..forms import AccountForm, EmailImportConfigForm
-from ..models import Account, EmailImportConfig, EmailImportMessage
+from ..models import Account, AppSettings, EmailImportConfig, EmailImportMessage
 from ..tasks import poll_email_import_task
 
 
@@ -75,3 +77,21 @@ def edit_account(request, pk):
         messages.success(request, f"Konto „{updated.name}“ wurde aktualisiert.")
         return redirect("settings")
     return render(request, "ledger/edit_account.html", {"form": form, "account": account})
+
+
+@login_required
+@require_POST
+def toggle_presentation_mode(request):
+    """Schaltet den Präsentationsmodus um und kehrt zur aufrufenden Seite zurück."""
+    app_settings = AppSettings.current()
+    app_settings.presentation_mode = not app_settings.presentation_mode
+    app_settings.save(update_fields=["presentation_mode"])
+    messages.success(
+        request,
+        "Präsentationsmodus eingeschaltet: Beträge werden als Prozentwerte angezeigt."
+        if app_settings.presentation_mode else "Präsentationsmodus ausgeschaltet.",
+    )
+    target = request.POST.get("next", "")
+    if not url_has_allowed_host_and_scheme(target, allowed_hosts={request.get_host()}):
+        target = "settings"
+    return redirect(target)

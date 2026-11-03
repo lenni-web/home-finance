@@ -1,6 +1,6 @@
 from django.db.models import Q
 
-from .models import Document, StatementImport, Transaction
+from .models import AppSettings, Document, StatementImport, Transaction
 
 
 def navigation_status(request):
@@ -20,3 +20,9 @@ def navigation_status(request):
         reviewed=True, category=None, is_internal_transfer=False
     ).count()
     return {"navigation_task_count": document_tasks + statement_tasks + uncategorized}
+
+
+def presentation(request):
+    if not request.user.is_authenticated:
+        return {}
+    return {"presentation_mode": AppSettings.current().presentation_mode}

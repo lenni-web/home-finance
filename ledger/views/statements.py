@@ -5,9 +5,11 @@ from django.shortcuts import get_object_or_404, redirect, render
 from ..document_matching import refresh_unmatched_document_reviews
 from ..forms import TransactionReviewFormSet
 from ..models import Document, StatementImport
+from ..presentation import hidden_in_presentation
 
 
 @login_required
+@hidden_in_presentation()
 def statement_review(request, pk):
     statement = get_object_or_404(
         StatementImport.objects.select_related("document", "account"), pk=pk
