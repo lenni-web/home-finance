@@ -113,7 +113,7 @@ class CSVParserTests(TestCase):
 
 class RegistryTests(TestCase):
     def test_registry_lists_formats_and_rejects_unknown(self):
-        self.assertEqual([name for name, _ in parser_choices()], ["ing_de_pdf", "csv_generic"])
+        self.assertEqual([name for name, _ in parser_choices()], ["ing_de_pdf", "sparkasse_pdf", "csv_generic"])
         self.assertEqual(get_parser("").name, "ing_de_pdf")
         self.assertEqual(get_parser("csv_generic").file_extension, ".csv")
         with self.assertRaises(ValueError):

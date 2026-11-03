@@ -1,8 +1,11 @@
 from .base import ParsedStatement, ParsedTransaction
 from .csv_generic import CSVStatementParser
 from .ing import INGStatementParser
+from .sparkasse import SparkasseStatementParser
 
-PARSERS = {parser.name: parser for parser in (INGStatementParser, CSVStatementParser)}
+PARSERS = {
+    parser.name: parser for parser in (INGStatementParser, SparkasseStatementParser, CSVStatementParser)
+}
 DEFAULT_PARSER = INGStatementParser.name
 
 
@@ -20,5 +23,5 @@ def parser_choices():
 
 __all__ = [
     "CSVStatementParser", "DEFAULT_PARSER", "INGStatementParser", "PARSERS", "ParsedStatement",
-    "ParsedTransaction", "get_parser", "parser_choices",
+    "ParsedTransaction", "SparkasseStatementParser", "get_parser", "parser_choices",
 ]
