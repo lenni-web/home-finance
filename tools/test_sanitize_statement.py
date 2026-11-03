@@ -44,3 +44,13 @@ class SanitizerTests(TestCase):
 
         self.assertNotIn("5678", result)
         self.assertNotIn("12.34", result)
+
+
+class ShapeTests(TestCase):
+    def test_shape_keeps_only_character_classes_and_punctuation(self):
+        from tools.shape_statement_text import shape
+
+        self.assertEqual(shape("REWE Markt GmbH, Köln 50667"), "XXXX Xxxxx XxxX, Xxxx 99999")
+        self.assertEqual(shape("DE12 3456//Nr. 7-A"), "XX99 9999//Xx. 9-X")
+        for secret in ("REWE", "Markt", "Köln", "3456"):
+            self.assertNotIn(secret, shape(f"{secret} geheim"))
