@@ -20,11 +20,21 @@ SAFE_WORDS = {
     "eingeräumte", "eur", "euro", "girokonto", "gutschrift", "iban", "kontoauszug",
     "kontoüberziehung", "lastschrift", "mandat", "neuer", "nummer", "referenz", "saldo",
     "seite", "valuta", "verwendungszweck", "von",
+    # Strukturbegriffe, wie sie auf Sparkassen-Auszügen vorkommen (keine Inhalte):
+    "abschluss", "basislastschrift", "bankleitzahl", "blatt", "blz", "buchungstag",
+    "buchungstext", "entgelt", "folgelastschrift", "haben", "kontonummer", "kontostand",
+    "kartenzahlung", "pn", "rechnungsabschluss", "soll", "summe", "umsatz", "umsätze",
+    "vorgang", "wert", "überweisung", "überweisungsgutschrift", "übertrag",
+    # Soll/Haben-Kennzeichen hinter Beträgen
+    "s", "h",
 }
 DATE_RE = re.compile(r"^(\d{2})\.(\d{2})\.(\d{4})$")
+# Kurzdaten ohne Jahr (01.07.) oder mit zweistelligem Jahr (01.07.26)
+SHORT_DATE_RE = re.compile(r"^\d{2}\.\d{2}\.(?:\d{2})?$")
 AMOUNT_RE = re.compile(r"^(-?)(\d{1,3}(?:\.\d{3})*|\d+),(\d{2})$")
 TOKEN_RE = re.compile(
     r"\s+|-?(?:\d{1,3}(?:\.\d{3})*|\d+),\d{2}|\d{2}\.\d{2}\.\d{4}"
+    r"|\d{2}\.\d{2}\.(?:\d{2})?(?!\w)"
     r"|[\wÄÖÜäöüß]+(?:\.[\wÄÖÜäöüß]+)*|[^\w\s]",
     re.UNICODE,
 )
@@ -61,6 +71,8 @@ class Sanitizer:
             return value
         if DATE_RE.fullmatch(value):
             return "01.01.2000"
+        if SHORT_DATE_RE.fullmatch(value):
+            return "01.01." + ("00" if len(value) == 8 else "")
         amount = AMOUNT_RE.fullmatch(value)
         if amount:
             return self.synthetic_amount(amount)
