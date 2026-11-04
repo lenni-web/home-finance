@@ -16,9 +16,9 @@ header { gap:1.25rem; }
 .nav-menu,.mobile-nav { position:relative; }
 .nav-menu>summary::-webkit-details-marker,.mobile-nav>summary::-webkit-details-marker { display:none; }
 .nav-menu-panel,.mobile-nav-panel { position:absolute; z-index:20; top:calc(100% + .45rem); right:0; min-width:235px; padding:.45rem; border:1px solid var(--hf-border); border-radius:12px; background:#fff; box-shadow:0 16px 40px rgba(15,23,42,.16); }
-.nav-menu-panel a,.mobile-nav-panel a,.mobile-nav-panel button { display:block; width:100%; padding:.65rem .75rem; border:0; border-radius:8px; background:transparent; color:#334155; font:inherit; font-weight:650; text-align:left; text-decoration:none; }
+.nav-menu-panel a,.nav-menu-panel button,.mobile-nav-panel a,.mobile-nav-panel button { display:block; width:100%; padding:.65rem .75rem; border:0; border-radius:8px; background:transparent; color:#334155; font:inherit; font-weight:650; text-align:left; text-decoration:none; }
 .nav-count { float:right; min-width:1.55rem; margin-left:.65rem; padding:.08rem .42rem; border-radius:999px; background:#fef3c7; color:#92400e; font-size:.75rem; text-align:center; }
-.nav-menu-panel a:hover,.mobile-nav-panel a:hover,.mobile-nav-panel button:hover { background:#f1f5f9; }
+.nav-menu-panel a:hover,.nav-menu-panel button:hover,.mobile-nav-panel a:hover,.mobile-nav-panel button:hover { background:#f1f5f9; }
 .mobile-nav { display:none; }
 .mobile-nav-label { display:block; padding:.7rem .75rem .25rem; color:#0f766e; font-size:.72rem; font-weight:800; letter-spacing:.07em; text-transform:uppercase; }
 .app-page-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.75rem 1.25rem; margin-bottom:1rem; }
@@ -70,3 +70,6 @@ div.tag-toggle-list label:has(input:checked) {
   color:#115e59;
 }
 div.tag-toggle-list label:hover { border-color:#14b8a6; }
+
+.nav-menu-panel .menu-form,.mobile-nav-panel .menu-form { margin:0; }
+.nav-menu-panel button[aria-pressed="true"],.mobile-nav-panel .menu-form button[aria-pressed="true"] { color:#78350f; background:#fef3c7; }

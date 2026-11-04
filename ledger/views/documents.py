@@ -157,34 +157,36 @@ def retry_failed_document(request, pk):
 
 @login_required
 @require_POST
-def delete_failed_document(request, pk):
-    document = get_object_or_404(
-        Document, pk=pk, processing_status=Document.ProcessingStatus.FAILED
-    )
-    if document.transactions.exists():
-        messages.error(
-            request,
-            "Das Dokument ist bereits mit Buchungen verknüpft und kann nicht gelöscht werden.",
-        )
-        return redirect("document_review", pk=document.pk)
+def delete_document(request, pk):
+    """Löscht ein noch nicht verarbeitetes Dokument samt Originaldatei.
 
+    Zulässig ist jeder Status außer „Verarbeitet“. Bei Kontoauszügen werden die noch
+    unbestätigten Buchungen mitgelöscht; bestätigte Buchungen schützen den Auszug.
+    """
+    document = get_object_or_404(
+        Document.objects.exclude(processing_status=Document.ProcessingStatus.PROCESSED), pk=pk
+    )
     file_name = document.file.name
     storage = document.file.storage
     with db_transaction.atomic():
         statement = StatementImport.objects.filter(document=document).first()
         if statement:
-            if statement.status != StatementImport.Status.FAILED or statement.transactions.exists():
+            if (
+                statement.status == StatementImport.Status.IMPORTED
+                or statement.transactions.filter(reviewed=True).exists()
+            ):
                 messages.error(
                     request,
-                    "Der Kontoauszug enthält bereits verarbeitete Daten und kann nicht gelöscht werden.",
+                    "Der Kontoauszug enthält bereits bestätigte Buchungen und kann nicht gelöscht werden.",
                 )
                 return redirect("document_review", pk=document.pk)
+            statement.transactions.all().delete()
             statement.delete()
         document.delete()
         if file_name:
             db_transaction.on_commit(lambda: storage.delete(file_name))
 
-    messages.success(request, "Das fehlgeschlagene Dokument wurde vollständig gelöscht.")
+    messages.success(request, "Das Dokument wurde samt Originaldatei vollständig gelöscht.")
     return redirect("document_archive")
 
 

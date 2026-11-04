@@ -1350,7 +1350,7 @@ Total 12,00 EUR
         file_name = document.file.name
 
         with self.captureOnCommitCallbacks(execute=True):
-            response = self.client.post(reverse("delete_failed_document", args=[document.pk]))
+            response = self.client.post(reverse("delete_document", args=[document.pk]))
 
         self.assertRedirects(response, reverse("document_archive"))
         self.assertFalse(Document.objects.filter(pk=document_pk).exists())
@@ -1365,7 +1365,7 @@ Total 12,00 EUR
             processing_status=Document.ProcessingStatus.PROCESSED,
         )
 
-        response = self.client.post(reverse("delete_failed_document", args=[document.pk]))
+        response = self.client.post(reverse("delete_document", args=[document.pk]))
 
         self.assertEqual(response.status_code, 404)
         self.assertTrue(Document.objects.filter(pk=document.pk).exists())
@@ -1378,7 +1378,7 @@ Total 12,00 EUR
             processing_status=Document.ProcessingStatus.FAILED,
         )
 
-        response = self.client.get(reverse("delete_failed_document", args=[document.pk]))
+        response = self.client.get(reverse("delete_document", args=[document.pk]))
 
         self.assertEqual(response.status_code, 405)
         self.assertTrue(Document.objects.filter(pk=document.pk).exists())

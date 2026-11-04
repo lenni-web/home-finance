@@ -283,3 +283,115 @@ class PayeeManagementTests(TestCase):
 
         self.client.logout()
         self.assertEqual(self.client.post(url).status_code, 302)
+
+
+class DeleteUnprocessedDocumentTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user("loescher", password="secret-test-password")
+        self.client.force_login(self.user)
+
+    def invoice(self, status, name="beleg.pdf"):
+        return Document.objects.create(
+            kind=Document.Kind.INVOICE, original_filename=name, processing_status=status,
+            file=SimpleUploadedFile(name, f"%PDF-{status}".encode(), "application/pdf"),
+        )
+
+    def test_every_status_except_processed_can_be_deleted_with_its_file(self):
+        for status in (Document.ProcessingStatus.PENDING, Document.ProcessingStatus.PROCESSING,
+                       Document.ProcessingStatus.REVIEW, Document.ProcessingStatus.FAILED):
+            document = self.invoice(status)
+            storage, file_name = document.file.storage, document.file.name
+
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.client.post(reverse("delete_document", args=[document.pk]))
+
+            self.assertRedirects(response, reverse("document_archive"))
+            self.assertFalse(Document.objects.filter(pk=document.pk).exists(), status)
+            self.assertFalse(storage.exists(file_name), status)
+
+    def test_processed_documents_are_kept(self):
+        document = self.invoice(Document.ProcessingStatus.PROCESSED)
+
+        response = self.client.post(reverse("delete_document", args=[document.pk]))
+
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(Document.objects.filter(pk=document.pk).exists())
+
+    def test_auto_matched_review_document_is_deleted_without_touching_the_booking(self):
+        statement = make_statement()
+        statement.status = StatementImport.Status.IMPORTED
+        statement.save()
+        booking, = add_transactions(statement, [("Shop", "")])
+        Transaction.objects.filter(pk=booking.pk).update(reviewed=True)
+        document = self.invoice(Document.ProcessingStatus.REVIEW)
+        document.transactions.add(booking)
+        document.auto_matched_transaction = booking
+        document.save()
+
+        self.client.post(reverse("delete_document", args=[document.pk]))
+
+        self.assertFalse(Document.objects.filter(pk=document.pk).exists())
+        self.assertTrue(Transaction.objects.filter(pk=booking.pk).exists())
+
+    def test_statement_under_review_is_deleted_with_its_pending_transactions(self):
+        statement = make_statement()
+        rows = add_transactions(statement, [("A", "x"), ("B", "y")])
+        document_pk, statement_pk = statement.document.pk, statement.pk
+        storage, file_name = statement.document.file.storage, statement.document.file.name
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(reverse("delete_document", args=[document_pk]))
+
+        self.assertRedirects(response, reverse("document_archive"))
+        self.assertFalse(StatementImport.objects.filter(pk=statement_pk).exists())
+        self.assertFalse(Transaction.objects.filter(pk__in=[row.pk for row in rows]).exists())
+        self.assertFalse(storage.exists(file_name))
+
+    def test_statement_with_confirmed_transactions_is_protected(self):
+        statement = make_statement()
+        row, = add_transactions(statement, [("A", "x")])
+        Transaction.objects.filter(pk=row.pk).update(reviewed=True)
+
+        response = self.client.post(reverse("delete_document", args=[statement.document.pk]))
+
+        self.assertRedirects(
+            response, reverse("document_review", args=[statement.document.pk]),
+            fetch_redirect_response=False,
+        )
+        self.assertTrue(StatementImport.objects.filter(pk=statement.pk).exists())
+        self.assertTrue(Transaction.objects.filter(pk=row.pk).exists())
+
+    def test_delete_buttons_are_offered_on_the_right_pages(self):
+        pending = self.invoice(Document.ProcessingStatus.PENDING, "offen.pdf")
+        processed = self.invoice(Document.ProcessingStatus.PROCESSED, "fertig.pdf")
+        statement = make_statement()
+        add_transactions(statement, [("A", "x")])
+        delete_url = lambda pk: reverse("delete_document", args=[pk])  # noqa: E731
+
+        self.assertContains(
+            self.client.get(reverse("document_review", args=[pending.pk])), delete_url(pending.pk)
+        )
+        self.assertNotContains(
+            self.client.get(reverse("document_review", args=[processed.pk])), delete_url(processed.pk)
+        )
+        self.assertContains(
+            self.client.get(reverse("statement_review", args=[statement.pk])),
+            delete_url(statement.document.pk),
+        )
+
+
+class MenuTests(TestCase):
+    def test_presentation_toggle_lives_in_the_administration_menu_only(self):
+        user = get_user_model().objects.create_user("menue", password="secret-test-password")
+        self.client.force_login(user)
+
+        html = self.client.get(reverse("dashboard")).content.decode()
+        panel_start = html.index('class="nav-menu-panel"')
+        panel = html[panel_start:html.index("</details>", panel_start)]
+        toggle = reverse("toggle_presentation_mode")
+
+        self.assertIn(toggle, panel)
+        outside_panels = html.replace(panel, "")
+        desktop_nav = outside_panels[outside_panels.index('class="desktop-nav"'):]
+        desktop_nav = desktop_nav[:desktop_nav.index('class="mobile-nav"')]
+        self.assertNotIn(toggle, desktop_nav)

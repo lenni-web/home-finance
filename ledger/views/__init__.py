@@ -8,7 +8,7 @@ from .configuration import (
     add_account, edit_account, save_email_settings, settings, toggle_presentation_mode,
 )
 from .documents import (
-    automatic_matches, delete_failed_document, document_archive, document_download,
+    automatic_matches, delete_document, document_archive, document_download,
     document_review, retry_failed_document, revoke_automatic_match, upload_document,
 )
 from .reports import analytics, dashboard, open_tasks
@@ -18,7 +18,7 @@ from .transactions import transaction_overview
 
 __all__ = [
     "budgets", "delete_budget", "delete_payee_name",
-    "add_account", "analytics", "automatic_matches", "dashboard", "delete_failed_document",
+    "add_account", "analytics", "automatic_matches", "dashboard", "delete_document",
     "delete_rule", "document_archive", "document_download", "document_review", "edit_account",
     "edit_classification", "edit_rule", "health", "manage_classification", "open_tasks",
     "operational_status", "retry_failed_document", "revoke_automatic_match",

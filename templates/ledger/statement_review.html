@@ -14,6 +14,7 @@
     .save { background: #e2e8f0; color: #1f2937; }
     .confirm { background: #0f766e; color: white; }
     .errorlist { color: #b91c1c; margin: .25rem 0; padding-left: 1rem; }
+      button.danger { background:#b91c1c; color:#fff; border:0; border-radius:8px; padding:.65rem .9rem; cursor:pointer; font-weight:650; }
   </style>{% endblock %}{% block content %}  <header class="app-page-header"><div class="app-page-heading"><h1>Kontoauszug prüfen</h1><p>{{ statement.account }} · {{ transaction_count }} Buchungen · Status: {{ statement.get_status_display }}</p></div>{% include "ledger/_navigation.html" %}</header>
   {% for message in messages %}<div class="card">{{ message }}</div>{% endfor %}
   <section class="card"><h2>Saldo-Prüfung: {{ statement.get_reconciliation_status_display }}</h2>{% if statement.reconciliation_status != "unavailable" %}<p>Anfangssaldo: {% amount statement.opening_balance %} · Summe der Buchungen: {% amount statement.transaction_total %} · Endsaldo: {% amount statement.closing_balance %}</p><p>{% if statement.reconciliation_status == "balanced" %}✓ Der Kontoauszug ist rechnerisch ausgeglichen.{% else %}⚠ Abweichung: {% amount statement.reconciliation_difference %}. Bitte Buchungen vor der Bestätigung prüfen.{% endif %}</p>{% else %}<p>Anfangs- oder Endsaldo konnte nicht sicher erkannt werden.</p>{% endif %}</section>
@@ -31,4 +32,5 @@
       </tr>{% endfor %}
     </tbody></table></div>
     {% if statement.status == "review" %}<div class="actions"><button class="save" name="action" value="save">Zwischenstand speichern</button><button class="confirm" name="action" value="confirm">Alle Buchungen bestätigen</button></div>{% endif %}
-  </form>{% endblock %}
+  </form>
+  {% if statement.status == "review" %}<section class="card"><h2>Auszug verwerfen</h2><p>Falsch hochgeladen oder falsches Konto gewählt? Der Auszug lässt sich samt Originaldatei und den noch unbestätigten Buchungen löschen.</p><form method="post" action="{% url 'delete_document' statement.document.pk %}" onsubmit="return confirm('Diesen Kontoauszug samt Originaldatei und allen erkannten Buchungen endgültig löschen?');">{% csrf_token %}<button class="danger" type="submit">Auszug löschen</button></form></section>{% endif %}{% endblock %}
