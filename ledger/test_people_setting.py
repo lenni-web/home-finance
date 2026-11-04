@@ -277,3 +277,45 @@ class IncomeOverviewTests(TestCase):
         self.assertNotContains(income, "Ausgabe</")
         self.assertEqual(expense.context["transaction_count"], 1)
         self.assertEqual(both.context["transaction_count"], 2)
+
+
+class IncomeCardLayoutTests(TestCase):
+    def setUp(self):
+        user = get_user_model().objects.create_user("layout", password="secret-test-password")
+        self.client.force_login(user)
+        document = Document.objects.create(
+            kind=Document.Kind.BANK_STATEMENT, original_filename="l.pdf",
+            file=SimpleUploadedFile("l.pdf", b"%PDF-layout", "application/pdf"),
+        )
+        statement = StatementImport.objects.create(
+            document=document, account=Account.objects.create(name="Giro")
+        )
+        for index, amount in enumerate(["800.00", "200.00", "-100.00"]):
+            Transaction.objects.create(
+                statement_import=statement, booking_date=date(2026, 6, 10), amount=amount,
+                counterparty="X", reviewed=True, source_fingerprint=f"{index:064d}",
+            )
+
+    def card(self, html):
+        start = html.index("<h2>Einnahmen nach Kategorie</h2>")
+        return html[start:html.index("</section>", start)]
+
+    def get(self):
+        return self.client.get(reverse("analytics"), {"month": "2026-06"}).content.decode()
+
+    def test_income_card_uses_the_same_grid_as_the_expense_cards(self):
+        self.assertEqual(self.get().count('style="grid-template-columns:1fr"'), 0)
+
+        AppSettings.objects.update_or_create(pk=1, defaults={"people_enabled": False})
+
+        # beide Kartenreihen laufen einspaltig, sonst bleibt die Einnahmen-Karte schmal
+        self.assertEqual(self.get().count('style="grid-template-columns:1fr"'), 2)
+
+    def test_percentages_are_not_shown_twice_in_presentation_mode(self):
+        self.assertIn('class="amount"', self.card(self.get()))
+
+        AppSettings.objects.update_or_create(pk=1, defaults={"presentation_mode": True})
+        card = self.card(self.get())
+
+        self.assertNotIn('class="amount"', card)
+        self.assertEqual(card.count("100,0 %"), 1)
