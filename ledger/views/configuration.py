@@ -79,19 +79,35 @@ def edit_account(request, pk):
     return render(request, "ledger/edit_account.html", {"form": form, "account": account})
 
 
-@login_required
-@require_POST
-def toggle_presentation_mode(request):
-    """Schaltet den Präsentationsmodus um und kehrt zur aufrufenden Seite zurück."""
+def _toggle_setting(request, field, enabled_message, disabled_message):
+    """Schaltet eine Ja/Nein-Einstellung um und kehrt zur aufrufenden Seite zurück."""
     app_settings = AppSettings.current()
-    app_settings.presentation_mode = not app_settings.presentation_mode
-    app_settings.save(update_fields=["presentation_mode"])
-    messages.success(
-        request,
-        "Präsentationsmodus eingeschaltet: Beträge werden als Prozentwerte angezeigt."
-        if app_settings.presentation_mode else "Präsentationsmodus ausgeschaltet.",
-    )
+    value = not getattr(app_settings, field)
+    setattr(app_settings, field, value)
+    app_settings.save(update_fields=[field])
+    messages.success(request, enabled_message if value else disabled_message)
     target = request.POST.get("next", "")
     if not url_has_allowed_host_and_scheme(target, allowed_hosts={request.get_host()}):
         target = "settings"
     return redirect(target)
+
+
+@login_required
+@require_POST
+def toggle_presentation_mode(request):
+    return _toggle_setting(
+        request, "presentation_mode",
+        "Präsentationsmodus eingeschaltet: Beträge werden als Prozentwerte angezeigt.",
+        "Präsentationsmodus ausgeschaltet.",
+    )
+
+
+@login_required
+@require_POST
+def toggle_people_assignment(request):
+    return _toggle_setting(
+        request, "people_enabled",
+        "Personen-Zuordnung eingeschaltet.",
+        "Personen-Zuordnung ausgeschaltet. Bestehende Zuordnungen bleiben erhalten und sind "
+        "nur ausgeblendet.",
+    )

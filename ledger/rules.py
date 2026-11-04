@@ -4,6 +4,7 @@ from django.db import transaction as db_transaction
 from django.db.models import F
 
 from .models import CategorizationRule, Category, Transaction
+from .preferences import people_enabled
 from .text_normalization import normalize_comparison_text
 
 
@@ -152,6 +153,7 @@ def categorization_suggestion(transaction):
 
 def apply_categorization_rules(transaction):
     applied = []
+    with_people = people_enabled()
     for rule in matching_rules(transaction, auto_only=True):
         changed_fields = []
         if rule.category_id and not transaction.category_id:
@@ -163,7 +165,8 @@ def apply_categorization_rules(transaction):
         if changed_fields:
             transaction.save(update_fields=changed_fields + ["updated_at"])
         transaction.tags.add(*rule.tags.all())
-        transaction.people.add(*rule.people.all())
+        if with_people:
+            transaction.people.add(*rule.people.all())
         CategorizationRule.objects.filter(pk=rule.pk).update(times_applied=F("times_applied") + 1)
         applied.append(rule)
     return applied
@@ -184,13 +187,16 @@ def build_rule_application_plan(scope="uncategorized"):
         .order_by("-priority", "name")
     )
     plan = []
+    with_people = people_enabled()
     for item in queryset:
         matches = [rule for rule in rules if rule.matches(item)]
         if not matches:
             continue
         category = next((rule.category for rule in matches if rule.category_id), None)
         tag_ids = {tag.pk for rule in matches for tag in rule.tags.all()}
-        person_ids = {person.pk for rule in matches for person in rule.people.all()}
+        person_ids = (
+            {person.pk for rule in matches for person in rule.people.all()} if with_people else set()
+        )
         marks_internal_transfer = any(rule.marks_internal_transfer for rule in matches)
         existing_tag_ids = {tag.pk for tag in item.tags.all()}
         existing_person_ids = {person.pk for person in item.people.all()}

@@ -122,7 +122,7 @@ def _apply_bulk_action(request, queryset, bulk_form):
             unlink_transfer(item)
         item.tags.add(*bulk["tags"])
         item.tags.remove(*bulk["remove_tags"])
-        item.people.add(*bulk["people"])
+        item.people.add(*bulk.get("people", []))
     if bulk.get("create_rules"):
         _create_rules_from_transactions(selected, bulk)
     messages.success(request, f"{selected.count()} Buchungen wurden bearbeitet.")
@@ -230,4 +230,4 @@ def _create_rules_from_transactions(transactions, bulk):
             ])
         rule.tags.add(*bulk["tags"])
         rule.tags.remove(*bulk["remove_tags"])
-        rule.people.add(*bulk["people"])
+        rule.people.add(*bulk.get("people", []))

@@ -10,6 +10,7 @@ from django.shortcuts import render
 
 from ..forms import AnalyticsFilterForm, DocumentUploadForm
 from ..models import Document, StatementImport, Transaction
+from ..preferences import people_enabled
 from ..presentation import base_context
 from ..periods import (
     ZERO, booked_months, financial_transactions, income_expense_totals, latest_booking_date, month_end,
@@ -153,6 +154,7 @@ def analytics(request):
     transactions = list(queryset)
     total = sum((abs(item.amount) for item in transactions), Decimal("0"))
 
+    show_people = people_enabled()
     category_groups = {}
     person_groups = {}
     for item in transactions:
@@ -163,6 +165,8 @@ def analytics(request):
             "color": item.category.color if item.category else "#94a3b8",
             "amount": Decimal("0"),
         })["amount"] += abs(item.amount)
+        if not show_people:
+            continue
         people = list(item.people.all())
         if people:
             share = abs(item.amount) / len(people)

@@ -43,7 +43,7 @@
   <section class="card"><form method="get"><div class="filters">{{ filters.as_p }}</div><p><button>Filter anwenden</button> <a class="button-link secondary" href="{% url 'transaction_overview' %}">Zurücksetzen</a></p></form></section>
   <form method="post">{% csrf_token %}{{ formset.management_form }}{{ formset.non_form_errors }}
     <section class="card"><h2>Auswahl gemeinsam bearbeiten</h2><div class="bulk-grid">{{ bulk_form.as_p }}</div><p><button name="action" value="bulk">Auf markierte Buchungen anwenden</button></p></section>
-    <section class="card table-wrap"><table><thead><tr><th><input class="selection-checkbox" type="checkbox" aria-label="Alle auswählen" onclick="document.querySelectorAll('[name=selected]').forEach(x => x.checked=this.checked)"></th><th>Datum</th><th>Konto</th><th>Zahlungspartner / Zweck</th><th>Betrag</th><th>Umbuchung</th><th>Kategorie</th><th>Tags</th><th>Personen</th><th>Kommentar</th></tr></thead><tbody>
+    <section class="card table-wrap"><table><thead><tr><th><input class="selection-checkbox" type="checkbox" aria-label="Alle auswählen" onclick="document.querySelectorAll('[name=selected]').forEach(x => x.checked=this.checked)"></th><th>Datum</th><th>Konto</th><th>Zahlungspartner / Zweck</th><th>Betrag</th><th>Umbuchung</th><th>Kategorie</th><th>Tags</th>{% if people_enabled %}<th>Personen</th>{% endif %}<th>Kommentar</th></tr></thead><tbody>
       {% for form in formset %}<tr>
         <td><input class="selection-checkbox" type="checkbox" name="selected" value="{{ form.instance.pk }}" aria-label="Buchung auswählen">{{ form.id }}</td>
         <td>{{ form.instance.booking_date|date:"d.m.Y" }}<div class="muted">Valuta {{ form.instance.value_date|date:"d.m.Y" }}</div></td>
@@ -53,9 +53,9 @@
         <td>{{ form.is_internal_transfer.errors }}{{ form.is_internal_transfer }}</td>
         <td>{{ form.category.errors }}{{ form.category }}</td>
         <td>{{ form.tags.errors }}{{ form.tags }}</td>
-        <td>{{ form.people.errors }}{{ form.people }}</td>
+        {% if people_enabled %}<td>{{ form.people.errors }}{{ form.people }}</td>{% endif %}
         <td>{{ form.comment.errors }}{{ form.comment }}</td>
-      </tr>{% empty %}<tr><td colspan="10">Keine Buchungen für diesen Filter.</td></tr>{% endfor %}
+      </tr>{% empty %}<tr><td colspan="{% if people_enabled %}10{% else %}9{% endif %}">Keine Buchungen für diesen Filter.</td></tr>{% endfor %}
     </tbody></table>{% if page_obj and page_obj.paginator.num_pages > 1 %}<nav class="pagination" aria-label="Seitennavigation">{% if page_obj.has_previous %}<a href="{% querystring page=page_obj.previous_page_number %}">← Zurück</a>{% else %}<span class="disabled">← Zurück</span>{% endif %}{% for link in pagination_links %}{% if link.ellipsis %}<span>…</span>{% elif link.current %}<span class="current" aria-current="page">{{ link.number }}</span>{% else %}<a href="{{ link.url }}">{{ link.number }}</a>{% endif %}{% endfor %}{% if page_obj.has_next %}<a href="{% querystring page=page_obj.next_page_number %}">Weiter →</a>{% else %}<span class="disabled">Weiter →</span>{% endif %}</nav>{% endif %}<div class="table-footer"><span class="muted">{{ displayed_from }}–{{ displayed_to }} von {{ transaction_count }} Buchungen angezeigt</span><label>Einträge anzeigen <select onchange="window.location.href=this.value">{% for option in per_page_options %}<option value="{{ option.url }}" {% if option.value == per_page %}selected{% endif %}>{{ option.label }}</option>{% endfor %}</select></label></div></section>
     <div class="actions"><button class="secondary" name="action" value="inline_save">Einzelne Zuordnungen speichern</button></div>
   </form>{% endblock %}

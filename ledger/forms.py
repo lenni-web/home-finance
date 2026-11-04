@@ -11,6 +11,7 @@ from django.utils.formats import number_format
 
 from .importers import get_parser
 from .periods import booked_months, month_choices
+from .preferences import drop_people_fields
 from .models import (
     Account, Budget, CategorizationRule, Category, Document, EmailImportConfig, Person, Tag, Transaction,
 )
@@ -257,10 +258,11 @@ class DocumentReviewForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         if self.instance.pk:
             self.fields["people"].initial = self.instance.people.all()
+        drop_people_fields(self, "people")
 
     def save(self, commit=True):
         document = super().save(commit=commit)
-        if commit:
+        if commit and "people" in self.cleaned_data:
             document.people.set(self.cleaned_data["people"])
         return document
 
@@ -322,6 +324,7 @@ class DocumentArchiveFilterForm(forms.Form):
             Document.objects.exclude(document_date=None).dates("document_date", "month", order="DESC"),
             blank_labels=("Alle Monate", ""),
         )
+        drop_people_fields(self, "person")
 
 
 class TransactionReviewForm(forms.ModelForm):
@@ -379,6 +382,7 @@ class TransactionFilterForm(forms.Form):
             self, Transaction.objects.filter(reviewed=True).dates("booking_date", "month", order="DESC"),
             blank_labels=("Alle Monate", "Alle Jahre"),
         )
+        drop_people_fields(self, "person")
 
 
 class AnalyticsFilterForm(forms.Form):
@@ -425,6 +429,10 @@ class TransactionCategorizationForm(forms.ModelForm):
             }),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        drop_people_fields(self, "people")
+
 
 TransactionCategorizationFormSet = modelformset_factory(
     Transaction,
@@ -461,6 +469,10 @@ class BulkCategorizationForm(forms.Form):
         required=False, initial=True, label="Neue Regeln künftig automatisch anwenden"
     )
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        drop_people_fields(self, "people")
+
 
 class CategoryForm(forms.ModelForm):
     class Meta:
@@ -492,6 +504,10 @@ class CategorizationRuleForm(forms.ModelForm):
         ]
         labels = {"priority": "Priorität (höher wird zuerst geprüft)"}
         widgets = {"tags": tag_checkbox_widget()}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        drop_people_fields(self, "people")
 
 
 class CategorizationRuleFilterForm(forms.Form):

@@ -67,6 +67,11 @@ class AppSettings(models.Model):
         verbose_name="Präsentationsmodus",
         help_text="Blendet Euro-Beträge aus und zeigt Prozentwerte.",
     )
+    people_enabled = models.BooleanField(
+        default=True,
+        verbose_name="Personen-Zuordnung",
+        help_text="Zeigt Personen in Filtern, Tabellen und Auswertungen. Bestehende Zuordnungen bleiben erhalten.",
+    )
 
     @classmethod
     def current(cls):

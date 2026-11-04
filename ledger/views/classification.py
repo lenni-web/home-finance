@@ -8,17 +8,20 @@ from ..forms import (
     CategorizationRuleFilterForm, CategorizationRuleForm, CategoryForm, PersonForm, TagForm,
 )
 from ..models import CategorizationRule, Category, PayeeName, Person, Tag
+from ..preferences import people_enabled
 from ..rules import apply_rule_application_plan, build_rule_application_plan
 
 
 @login_required
 def manage_classification(request):
+    with_people = people_enabled()
     forms = {
         "category": CategoryForm(prefix="category"),
         "tag": TagForm(prefix="tag"),
-        "person": PersonForm(prefix="person"),
         "rule": CategorizationRuleForm(prefix="rule"),
     }
+    if with_people:
+        forms["person"] = PersonForm(prefix="person")
     if request.method == "POST":
         kind = request.POST.get("kind")
         if kind == "apply_rules":
@@ -38,9 +41,10 @@ def manage_classification(request):
         form_classes = {
             "category": CategoryForm,
             "tag": TagForm,
-            "person": PersonForm,
             "rule": CategorizationRuleForm,
         }
+        if with_people:
+            form_classes["person"] = PersonForm
         if kind in form_classes:
             form = form_classes[kind](request.POST, prefix=kind)
             forms[kind] = form
@@ -57,13 +61,15 @@ def manage_classification(request):
         values = rule_filters.cleaned_data
         if values.get("q"):
             query = values["q"]
-            rules = rules.filter(
+            matches = (
                 Q(name__icontains=query)
                 | Q(match_text__icontains=query)
                 | Q(category__name__icontains=query)
                 | Q(tags__name__icontains=query)
-                | Q(people__name__icontains=query)
             )
+            if with_people:
+                matches |= Q(people__name__icontains=query)
+            rules = rules.filter(matches)
         if values.get("status") == "active":
             rules = rules.filter(active=True)
         elif values.get("status") == "inactive":
@@ -88,7 +94,7 @@ def manage_classification(request):
         "forms": forms,
         "categories": Category.objects.order_by("name"),
         "tags": Tag.objects.order_by("name"),
-        "people": Person.objects.order_by("name"),
+        "people": Person.objects.order_by("name") if with_people else [],
         "rules": rules,
         "payee_names": PayeeName.objects.order_by("name"),
         "rule_count": rule_count,
@@ -127,7 +133,7 @@ def edit_classification(request, kind, pk):
         "person": (Person, PersonForm, "Person"),
     }
     definition = editable.get(kind)
-    if definition is None:
+    if definition is None or (kind == "person" and not people_enabled()):
         return redirect("manage_classification")
     model, form_class, label = definition
     item = get_object_or_404(model, pk=pk)
@@ -147,7 +153,7 @@ def toggle_classification(request, kind, pk):
         return redirect("manage_classification")
     models = {"category": Category, "tag": Tag, "person": Person, "rule": CategorizationRule}
     model = models.get(kind)
-    if model is None:
+    if model is None or (kind == "person" and not people_enabled()):
         return redirect("manage_classification")
     item = get_object_or_404(model, pk=pk)
     item.active = not item.active

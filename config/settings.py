@@ -39,7 +39,7 @@ TEMPLATES = [{
         "django.contrib.auth.context_processors.auth",
         "django.contrib.messages.context_processors.messages",
         "ledger.context_processors.navigation_status",
-        "ledger.context_processors.presentation",
+        "ledger.context_processors.app_settings",
     ]},
 }]
 WSGI_APPLICATION = "config.wsgi.application"

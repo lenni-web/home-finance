@@ -22,7 +22,11 @@ def navigation_status(request):
     return {"navigation_task_count": document_tasks + statement_tasks + uncategorized}
 
 
-def presentation(request):
+def app_settings(request):
     if not request.user.is_authenticated:
         return {}
-    return {"presentation_mode": AppSettings.current().presentation_mode}
+    current = AppSettings.current()
+    return {
+        "presentation_mode": current.presentation_mode,
+        "people_enabled": current.people_enabled,
+    }
