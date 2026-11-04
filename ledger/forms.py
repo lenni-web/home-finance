@@ -370,6 +370,11 @@ class TransactionFilterForm(forms.Form):
     )
     q = forms.CharField(required=False, label="Suche")
     uncategorized = forms.BooleanField(required=False, label="Nur ohne Kategorie")
+    direction = forms.ChoiceField(
+        required=False,
+        label="Richtung",
+        choices=[("", "Eingänge und Ausgaben"), ("income", "Nur Eingänge"), ("expense", "Nur Ausgaben")],
+    )
     transfer_status = forms.ChoiceField(
         required=False,
         label="Umbuchungen",

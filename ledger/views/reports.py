@@ -1,5 +1,6 @@
 import re
 from datetime import date
+from collections import Counter
 from decimal import Decimal
 from urllib.parse import urlencode
 
@@ -12,6 +13,7 @@ from ..forms import AnalyticsFilterForm, DocumentUploadForm
 from ..models import Document, StatementImport, Transaction
 from ..preferences import people_enabled
 from ..presentation import base_context
+from ..rules import normalize_merchant
 from ..periods import (
     ZERO, booked_months, financial_transactions, income_expense_totals, latest_booking_date, month_end,
     month_choices, parse_month, previous_month,
@@ -118,6 +120,57 @@ def _chart_items(groups, total, period_params, account_id, filter_name):
     return items, ", ".join(gradient) or "#e2e8f0 0% 100%"
 
 
+INCOME_SOURCE_LIMIT = 8
+
+
+def _income_sources(queryset, period_params, account_id):
+    """Eingänge nach Absender (Zahlungspartner), größte zuerst; der Rest wird zusammengefasst."""
+    groups = {}
+    for counterparty, amount in queryset.filter(amount__gt=0).values_list("counterparty", "amount"):
+        name = " ".join((counterparty or "").split())
+        group = groups.setdefault(normalize_merchant(name) or name.casefold(), {
+            "names": Counter(), "amount": Decimal("0"), "count": 0,
+        })
+        group["names"][name] += 1
+        group["amount"] += amount
+        group["count"] += 1
+    for group in groups.values():
+        # Anzeigename: die häufigste Schreibweise, bei Gleichstand alphabetisch
+        name = min(group["names"], key=lambda candidate: (-group["names"][candidate], candidate))
+        group["name"], group["has_name"] = name or "Ohne Absender", bool(name)
+    ordered = sorted(groups.values(), key=lambda group: group["amount"], reverse=True)
+    total = sum((group["amount"] for group in ordered), Decimal("0"))
+    largest = ordered[0]["amount"] if ordered else Decimal("0")
+
+    def shares(group):
+        return {
+            **group,
+            "percent": round(group["amount"] / total * 100, 1) if total else 0,
+            "bar_percent": round(group["amount"] / largest * 100) if largest else 0,
+        }
+
+    items = []
+    for group in ordered[:INCOME_SOURCE_LIMIT]:
+        item = shares({key: value for key, value in group.items() if key != "names"})
+        if group["has_name"]:
+            params = {**period_params, "direction": "income"}
+            if account_id:
+                params["account"] = account_id
+            params["q"] = group["name"]
+            item["drill_url"] = f"?{urlencode(params)}"
+        items.append(item)
+    rest = ordered[INCOME_SOURCE_LIMIT:]
+    other = shares({
+        "name": f"{len(rest)} weitere Absender",
+        "amount": sum((group["amount"] for group in rest), Decimal("0")),
+        "count": sum(group["count"] for group in rest),
+    }) if rest else None
+    return {
+        "items": items, "other": other, "total": total,
+        "count": sum(group["count"] for group in ordered), "source_count": len(ordered),
+    }
+
+
 @login_required
 def analytics(request):
     fallback = latest_booking_date()
@@ -188,6 +241,21 @@ def analytics(request):
     person_items, person_gradient = _chart_items(
         person_groups.values(), total, period_params, account_id, "person"
     )
+    income_sources = _income_sources(financial_queryset, period_params, account_id)
+    income_category_groups = [
+        {
+            "id": row["category_id"],
+            "name": row["category__name"] or "Ohne Kategorie",
+            "color": row["category__color"] or "#94a3b8",
+            "amount": row["total"],
+        }
+        for row in financial_queryset.filter(amount__gt=0)
+        .values("category_id", "category__name", "category__color").annotate(total=Sum("amount"))
+    ]
+    income_category_items, income_category_gradient = _chart_items(
+        income_category_groups, totals["income"], {**period_params, "direction": "income"},
+        account_id, "category",
+    )
     monthly_rows = []
     if period == "year":
         monthly_totals = {
@@ -221,6 +289,9 @@ def analytics(request):
         "transaction_count": len(transactions), "monthly_rows": monthly_rows,
         "category_items": category_items, "category_gradient": category_gradient,
         "person_items": person_items, "person_gradient": person_gradient,
+        "income_sources": income_sources,
+        "income_category_items": income_category_items,
+        "income_category_gradient": income_category_gradient,
         **base_context(totals["income"], totals["expenses"]),
     })
 

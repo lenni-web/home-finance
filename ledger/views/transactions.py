@@ -42,6 +42,10 @@ def _filtered_transactions(request):
             queryset = queryset.filter(people=values["person"])
         if values.get("uncategorized"):
             queryset = queryset.filter(category__isnull=True, is_internal_transfer=False)
+        if values.get("direction") == "income":
+            queryset = queryset.filter(amount__gt=0)
+        elif values.get("direction") == "expense":
+            queryset = queryset.filter(amount__lt=0)
         if values.get("transfer_status") == "internal":
             queryset = queryset.filter(is_internal_transfer=True)
         elif values.get("transfer_status") == "open":
