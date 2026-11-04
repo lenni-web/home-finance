@@ -184,103 +184,22 @@ class IncomeOverviewTests(TestCase):
         self.counter = 0
 
     def book(self, amount, counterparty, *, day=date(2026, 6, 10), reviewed=True, transfer=False,
-             statement=None):
+             statement=None, category=None):
         self.counter += 1
         return Transaction.objects.create(
             statement_import=statement or self.statement, booking_date=day, amount=amount,
             counterparty=counterparty, reviewed=reviewed, is_internal_transfer=transfer,
-            source_fingerprint=f"{self.counter:064d}",
+            category=category, source_fingerprint=f"{self.counter:064d}",
         )
 
-    def get(self, **params):
+    def items(self, **params):
         params.setdefault("month", "2026-06")
-        return self.client.get(reverse("analytics"), params).context["income_sources"]
-
-    def test_groups_by_sender_largest_first_and_ignores_transfers_and_expenses(self):
-        self.book("2500.00", "Arbeitgeber AG")
-        self.book("2000.00", "Arbeitgeber AG", day=date(2026, 6, 15))
-        self.book("500.00", "ARBEITGEBER AG", day=date(2026, 6, 20))  # gleicher Absender
-        self.book("100.00", "Max Mustermann")
-        self.book("-80.00", "Supermarkt")  # Ausgabe
-        self.book("999.00", "Umbuchung", transfer=True)
-        self.book("55.00", "Ungeprüft", reviewed=False)
-        self.book("700.00", "Altmonat", day=date(2026, 5, 31))
-
-        income = self.get()
-
-        self.assertEqual([item["name"] for item in income["items"]], ["Arbeitgeber AG", "Max Mustermann"])
-        first, second = income["items"]
-        self.assertEqual((first["amount"], first["count"], first["percent"]), (5000, 3, 98.0))
-        self.assertEqual((second["amount"], second["percent"], second["bar_percent"]), (100, 2.0, 2))
-        self.assertEqual((income["total"], income["count"], income["source_count"]), (5100, 4, 2))
-        self.assertIsNone(income["other"])
-
-    def test_long_tails_are_summarised_and_drill_down_links_keep_the_filters(self):
-        names = ["Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta", "Theta", "Iota",
-                 "Kappa", "Lambda"]
-        for index, name in enumerate(names):
-            self.book(f"{100 - index}.00", name)
-
-        income = self.get(account=str(self.account.pk))
-
-        self.assertEqual(len(income["items"]), 8)
-        self.assertEqual(income["other"]["name"], "3 weitere Absender")
-        self.assertEqual(income["other"]["count"], 3)
-        url = income["items"][0]["drill_url"]
-        self.assertIn("month=2026-06", url)
-        self.assertIn(f"account={self.account.pk}", url)
-        self.assertIn("q=Alpha", url)
-        self.assertIn("direction=income", url)
-
-    def test_account_filter_year_view_and_empty_state(self):
-        self.book("40.00", "Giro-Quelle")
-        other = StatementImport.objects.create(
-            document=Document.objects.create(
-                kind=Document.Kind.BANK_STATEMENT, original_filename="t.pdf",
-                file=SimpleUploadedFile("t.pdf", b"%PDF-tages", "application/pdf"),
-            ),
-            account=self.other_account,
-        )
-        self.book("60.00", "Tagesgeld-Quelle", statement=other)
-
-        only_giro = self.get(account=str(self.account.pk))
-        self.assertEqual([item["name"] for item in only_giro["items"]], ["Giro-Quelle"])
-
-        year = self.client.get(reverse("analytics"), {"period": "year", "year": "2026"})
-        self.assertEqual(year.context["income_sources"]["count"], 2)
-        self.assertContains(year, "class=\"income\">+")
-
-        empty = self.client.get(reverse("analytics"), {"month": "2020-01"})
-        self.assertContains(empty, "Keine Eingänge im gewählten Zeitraum.")
-
-    def test_page_shows_the_section_with_formatted_amounts(self):
-        self.book("1234.50", "Arbeitgeber AG")
-        self.book("10.00", "")
-
-        page = self.client.get(reverse("analytics"), {"month": "2026-06"})
-
-        self.assertContains(page, "<h2>Eingänge nach Absender</h2>")
-        self.assertContains(page, "2 Eingänge von 2 Absendern")
-        self.assertContains(page, "1.234,50 €")
-        self.assertContains(page, "Ohne Absender")
-
-    def test_presentation_mode_shows_only_percentages_for_income(self):
-        self.book("1234.50", "Arbeitgeber AG")
-        self.book("-100.00", "Laden")
-        AppSettings.objects.update_or_create(pk=1, defaults={"presentation_mode": True})
-
-        html = self.client.get(reverse("analytics"), {"month": "2026-06"}).content.decode()
-
-        self.assertIn("Eingänge", html)
-        self.assertNotIn("1.234,50", html)
-        self.assertNotIn("1234.50", html)
-
+        response = self.client.get(reverse("analytics"), params)
+        return [(entry["name"], entry["percent"]) for entry in response.context["income_category_items"]]
 
     def test_income_by_category_links_to_incoming_bookings_only(self):
         wages = Category.objects.create(name="Gehalt", color="#336699")
-        item = self.book("3000.00", "Arbeitgeber AG")
-        item.category = wages
-        item.save()
+        self.book("3000.00", "Arbeitgeber AG", category=wages)
         self.book("1000.00", "Sonstiger Absender")
         self.book("-500.00", "Laden")
 
@@ -293,6 +212,57 @@ class IncomeOverviewTests(TestCase):
         self.assertIn("direction=income", items[0]["drill_url"])
         self.assertIn(f"category={wages.pk}", items[0]["drill_url"])
         self.assertIn("uncategorized=on", items[1]["drill_url"])
+
+    def test_ignores_expenses_transfers_unconfirmed_and_other_months(self):
+        wages = Category.objects.create(name="Gehalt")
+        self.book("100.00", "A", category=wages)
+        self.book("-80.00", "Ausgabe", category=wages)
+        self.book("999.00", "Umbuchung", transfer=True, category=wages)
+        self.book("55.00", "Ungeprüft", reviewed=False, category=wages)
+        self.book("700.00", "Altmonat", day=date(2026, 5, 31), category=wages)
+
+        self.assertEqual(self.items(), [("Gehalt", 100.0)])
+
+    def test_account_filter_year_view_and_empty_state(self):
+        giro = Category.objects.create(name="Giro-Einnahmen")
+        tages = Category.objects.create(name="Zinsen")
+        self.book("40.00", "Giro-Quelle", category=giro)
+        other = StatementImport.objects.create(
+            document=Document.objects.create(
+                kind=Document.Kind.BANK_STATEMENT, original_filename="t.pdf",
+                file=SimpleUploadedFile("t.pdf", b"%PDF-tages", "application/pdf"),
+            ),
+            account=self.other_account,
+        )
+        self.book("60.00", "Tagesgeld-Quelle", statement=other, category=tages)
+
+        self.assertEqual(self.items(account=str(self.account.pk)), [("Giro-Einnahmen", 100.0)])
+
+        year = self.client.get(reverse("analytics"), {"period": "year", "year": "2026"})
+        self.assertEqual(len(year.context["income_category_items"]), 2)
+        self.assertContains(year, "class=\"income\">+")
+
+        empty = self.client.get(reverse("analytics"), {"month": "2020-01"})
+        self.assertContains(empty, "Keine Einnahmen im gewählten Zeitraum.")
+
+    def test_sender_list_is_gone(self):
+        self.book("1234.50", "Arbeitgeber AG")
+
+        page = self.client.get(reverse("analytics"), {"month": "2026-06"})
+
+        self.assertNotContains(page, "Eingänge nach Absender")
+        self.assertNotIn("income_sources", page.context)
+
+    def test_presentation_mode_shows_only_percentages_for_income(self):
+        self.book("1234.50", "Arbeitgeber AG")
+        self.book("-100.00", "Laden")
+        AppSettings.objects.update_or_create(pk=1, defaults={"presentation_mode": True})
+
+        html = self.client.get(reverse("analytics"), {"month": "2026-06"}).content.decode()
+
+        self.assertIn("Einnahmen nach Kategorie", html)
+        self.assertNotIn("1.234,50", html)
+        self.assertNotIn("1234.50", html)
 
     def test_transaction_filter_direction_separates_income_from_expenses(self):
         self.book("100.00", "Eingang")
