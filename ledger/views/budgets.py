@@ -10,6 +10,9 @@ from ..budgets import budget_overview
 from ..forms import BudgetForm
 from ..models import Budget
 from ..periods import booked_months, latest_booking_date, month_choices, parse_month
+from ..preferences import requires_setting
+
+BUDGETS_OFF = "Die Budget-Funktion ist ausgeschaltet. Du kannst sie in den Einstellungen einschalten."
 
 
 def _month_url(month_start):
@@ -17,6 +20,7 @@ def _month_url(month_start):
 
 
 @login_required
+@requires_setting("budgets_enabled", BUDGETS_OFF)
 def budgets(request):
     month_start = parse_month(request.GET.get("month"), latest_booking_date())
     if request.method == "POST":
@@ -38,6 +42,7 @@ def budgets(request):
 
 @login_required
 @require_POST
+@requires_setting("budgets_enabled", BUDGETS_OFF)
 def delete_budget(request, pk):
     budget = Budget.objects.filter(pk=pk).select_related("category").first()
     month_start = parse_month(request.POST.get("month"), latest_booking_date())

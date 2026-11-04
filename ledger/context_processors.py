@@ -29,4 +29,5 @@ def app_settings(request):
     return {
         "presentation_mode": current.presentation_mode,
         "people_enabled": current.people_enabled,
+        "budgets_enabled": current.budgets_enabled,
     }

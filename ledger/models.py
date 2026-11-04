@@ -72,6 +72,11 @@ class AppSettings(models.Model):
         verbose_name="Personen-Zuordnung",
         help_text="Zeigt Personen in Filtern, Tabellen und Auswertungen. Bestehende Zuordnungen bleiben erhalten.",
     )
+    budgets_enabled = models.BooleanField(
+        default=True,
+        verbose_name="Budgets",
+        help_text="Zeigt die Budget-Seite im Menü. Bestehende Budgets bleiben erhalten.",
+    )
 
     @classmethod
     def current(cls):

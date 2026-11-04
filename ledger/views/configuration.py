@@ -111,3 +111,14 @@ def toggle_people_assignment(request):
         "Personen-Zuordnung ausgeschaltet. Bestehende Zuordnungen bleiben erhalten und sind "
         "nur ausgeblendet.",
     )
+
+
+@login_required
+@require_POST
+def toggle_budgets(request):
+    return _toggle_setting(
+        request, "budgets_enabled",
+        "Budgets eingeschaltet.",
+        "Budgets ausgeschaltet. Bestehende Budgets bleiben erhalten und erscheinen wieder, "
+        "sobald du die Funktion einschaltest.",
+    )

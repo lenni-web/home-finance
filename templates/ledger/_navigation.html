@@ -4,7 +4,7 @@
     <a href="{% url 'transaction_overview' %}" class="{% if request.resolver_match.url_name == 'transaction_overview' %}active{% endif %}">Buchungen</a>
     <a href="{% url 'document_archive' %}" class="{% if request.resolver_match.url_name == 'document_archive' or request.resolver_match.url_name == 'document_review' or request.resolver_match.url_name == 'statement_review' %}active{% endif %}">Dokumente</a>
     <a href="{% url 'analytics' %}" class="{% if request.resolver_match.url_name == 'analytics' %}active{% endif %}">Auswertungen</a>
-    <a href="{% url 'budgets' %}" class="{% if request.resolver_match.url_name == 'budgets' %}active{% endif %}">Budgets</a>
+    {% if budgets_enabled %}<a href="{% url 'budgets' %}" class="{% if request.resolver_match.url_name == 'budgets' %}active{% endif %}">Budgets</a>{% endif %}
     <details class="nav-menu">
       <summary class="{% if request.resolver_match.url_name == 'automatic_matches' or request.resolver_match.url_name == 'open_tasks' or request.resolver_match.url_name == 'manage_classification' or request.resolver_match.url_name == 'edit_classification' or request.resolver_match.url_name == 'edit_rule' or request.resolver_match.url_name == 'settings' or request.resolver_match.url_name == 'edit_account' or request.resolver_match.url_name == 'operational_status' %}active{% endif %}">Verwaltung <span aria-hidden="true">⌄</span></summary>
       <div class="nav-menu-panel">
@@ -21,7 +21,7 @@
   <details class="mobile-nav">
     <summary aria-label="Menü öffnen">Menü <span aria-hidden="true">☰</span></summary>
     <div class="mobile-nav-panel">
-      <a href="{% url 'dashboard' %}">Übersicht</a><a href="{% url 'transaction_overview' %}">Buchungen</a><a href="{% url 'document_archive' %}">Dokumente</a><a href="{% url 'analytics' %}">Auswertungen</a><a href="{% url 'budgets' %}">Budgets</a>
+      <a href="{% url 'dashboard' %}">Übersicht</a><a href="{% url 'transaction_overview' %}">Buchungen</a><a href="{% url 'document_archive' %}">Dokumente</a><a href="{% url 'analytics' %}">Auswertungen</a>{% if budgets_enabled %}<a href="{% url 'budgets' %}">Budgets</a>{% endif %}
       <span class="mobile-nav-label">Verwaltung</span>
       <a href="{% url 'open_tasks' %}">Offene Aufgaben{% if navigation_task_count %}<span class="nav-count">{{ navigation_task_count }}</span>{% endif %}</a><a href="{% url 'automatic_matches' %}">Automatische Zuordnungen</a><a href="{% url 'manage_classification' %}">Kategorien & Regeln</a><a href="{% url 'settings' %}">Einstellungen</a><a href="{% url 'operational_status' %}">Betriebsstatus</a>
       <form class="menu-form" method="post" action="{% url 'toggle_presentation_mode' %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button>Präsentation{% if presentation_mode %}: an{% endif %}</button></form>

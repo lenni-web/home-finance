@@ -5,8 +5,8 @@ from .classification import (
     delete_payee_name, delete_rule, edit_classification, edit_rule, manage_classification, toggle_classification,
 )
 from .configuration import (
-    add_account, edit_account, save_email_settings, settings, toggle_people_assignment,
-    toggle_presentation_mode,
+    add_account, edit_account, save_email_settings, settings, toggle_budgets,
+    toggle_people_assignment, toggle_presentation_mode,
 )
 from .documents import (
     automatic_matches, delete_document, document_archive, document_download,
@@ -24,5 +24,5 @@ __all__ = [
     "edit_classification", "edit_rule", "health", "manage_classification", "open_tasks",
     "operational_status", "retry_failed_document", "revoke_automatic_match",
     "save_email_settings", "settings", "statement_review", "toggle_classification",
-    "toggle_people_assignment", "toggle_presentation_mode", "transaction_overview", "upload_document",
+    "toggle_budgets", "toggle_people_assignment", "toggle_presentation_mode", "transaction_overview", "upload_document",
 ]
