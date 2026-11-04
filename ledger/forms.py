@@ -337,6 +337,11 @@ class TransactionReviewForm(forms.ModelForm):
             "description": forms.Textarea(attrs={"rows": 2}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Buchungen ohne Verwendungszweck (z. B. Sparkasse mit nur einer Textzeile) sind normal.
+        self.fields["description"].required = False
+
 
 TransactionReviewFormSet = modelformset_factory(
     Transaction,

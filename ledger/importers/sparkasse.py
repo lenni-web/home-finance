@@ -49,6 +49,8 @@ class SparkasseStatementParser:
     version = 1
     label = "Sparkasse (PDF)"
     file_extension = ".pdf"
+    # Name und Betreff stehen ohne Trennzeichen im Fließtext (siehe ledger/payees.py).
+    splits_payee = True
 
     @staticmethod
     def _lines(fragments):

@@ -5,6 +5,7 @@ from django.db import transaction
 
 from .importers import get_parser
 from .models import Document, StatementImport, Transaction
+from .payees import apply_split, candidate_keys
 from .rules import apply_categorization_rules
 from .statement_reconciliation import store_reconciliation
 
@@ -20,9 +21,9 @@ def process_statement_import(statement):
     document.processing_error = ""
     document.save(update_fields=["processing_status", "processing_error", "updated_at"])
     try:
-        parsed_statement = get_parser(statement.parser_name)().parse_statement(
-            Path(document.file.path)
-        )
+        parser_class = get_parser(statement.parser_name)
+        parsed_statement = parser_class().parse_statement(Path(document.file.path))
+        candidates = candidate_keys() if getattr(parser_class, "splits_payee", False) else None
         parsed = parsed_statement.transactions
         if not parsed:
             raise ValueError("Im PDF wurden keine Buchungen erkannt.")
@@ -33,13 +34,16 @@ def process_statement_import(statement):
                     f"{document.sha256}:{item.source_page}:{index}:"
                     f"{item.booking_date}:{item.amount}:{item.counterparty}"
                 )
+                counterparty, description = item.counterparty, item.description
+                if candidates is not None:
+                    counterparty, description = apply_split(counterparty, description, candidates)
                 created = Transaction.objects.create(
                     statement_import=statement,
                     booking_date=item.booking_date,
                     value_date=item.value_date,
                     booking_type=item.booking_type,
-                    counterparty=item.counterparty,
-                    description=item.description,
+                    counterparty=counterparty,
+                    description=description,
                     amount=item.amount,
                     currency=item.currency,
                     source_page=item.source_page,

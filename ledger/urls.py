@@ -34,6 +34,10 @@ urlpatterns = [
         views.toggle_classification,
         name="toggle_classification",
     ),
+    path(
+        "settings/classification/payees/<int:pk>/delete/", views.delete_payee_name,
+        name="delete_payee_name",
+    ),
     path("settings/classification/rules/<int:pk>/edit/", views.edit_rule, name="edit_rule"),
     path("settings/classification/rules/<int:pk>/delete/", views.delete_rule, name="delete_rule"),
     path(

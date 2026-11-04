@@ -7,7 +7,7 @@ from django.views.decorators.http import require_POST
 from ..forms import (
     CategorizationRuleFilterForm, CategorizationRuleForm, CategoryForm, PersonForm, TagForm,
 )
-from ..models import CategorizationRule, Category, Person, Tag
+from ..models import CategorizationRule, Category, PayeeName, Person, Tag
 from ..rules import apply_rule_application_plan, build_rule_application_plan
 
 
@@ -90,6 +90,7 @@ def manage_classification(request):
         "tags": Tag.objects.order_by("name"),
         "people": Person.objects.order_by("name"),
         "rules": rules,
+        "payee_names": PayeeName.objects.order_by("name"),
         "rule_count": rule_count,
         "filtered_rule_count": rules.count(),
         "rule_filters": rule_filters,
@@ -152,4 +153,14 @@ def toggle_classification(request, kind, pk):
     item.active = not item.active
     item.save(update_fields=["active", "updated_at"])
     messages.success(request, f"„{item}“ wurde {'aktiviert' if item.active else 'deaktiviert'}.")
+    return redirect("manage_classification")
+
+
+@login_required
+@require_POST
+def delete_payee_name(request, pk):
+    payee = get_object_or_404(PayeeName, pk=pk)
+    name = payee.name
+    payee.delete()
+    messages.success(request, f"Zahlungspartner „{name}“ wird nicht mehr automatisch getrennt.")
     return redirect("manage_classification")

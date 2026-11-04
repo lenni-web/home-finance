@@ -46,6 +46,19 @@ def import_format_choices():
     return parser_choices()
 
 
+class PayeeName(TimestampedModel):
+    """Vom Benutzer bestätigter Zahlungspartner-Name, mit dem Buchungstexte getrennt werden."""
+
+    name = models.CharField(max_length=120)
+    key = models.CharField(max_length=200, unique=True, editable=False)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
 class AppSettings(models.Model):
     """Anwendungsweite Einstellungen (genau eine Zeile)."""
 
